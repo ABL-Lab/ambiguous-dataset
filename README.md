@@ -11,7 +11,7 @@
 ARXIV   
 [![Paper](http://img.shields.io/badge/arxiv-math.co:1480.1111-B31B1B.svg)](https://www.nature.com/articles/nature14539)
 -->
-![CI testing](https://github.com/PyTorchLightning/deep-learning-project-template/workflows/CI%20testing/badge.svg?branch=master&event=push)
+![CI testing](https://github.com/PyTorchLightning/ambiguous-dataset/workflows/CI%20testing/badge.svg?branch=master&event=push)
 
 
 <!--  
@@ -20,16 +20,16 @@ Conference
 </div>
  
 ## Description   
-What it does   
+Ambiguous dataset generation using conditional variational autoencoder (CVAE).  
 
 ## How to run   
 First, install dependencies   
 ```bash
 # clone project   
-git clone https://github.com/YourGithubName/deep-learning-project-template
+git clone https://github.com/ABL-Lab/ambiguous-dataset
 
 # install project   
-cd deep-learning-project-template 
+cd ambiguous-dataset 
 pip install -e .   
 pip install -r requirements.txt
  ```   
