@@ -38,8 +38,8 @@ pip install -r requirements.txt
 This project is setup as a package which means you can now easily import any file into any other file like so. Currently only
 MNIST and EMNIST (letter MNIST) are supported. <dataset>_fly means the data is generated on the fly in the data loader, using the CVAE generator.
 ```python
-from project.dataset.dataset import *
-from project.dataset.dataset import EMNIST_fly, MNIST_fly
+from ambiguous.dataset.dataset import *
+from ambiguous.dataset.dataset import EMNIST_fly, MNIST_fly
 
 ambiguousDataset=EMNIST_fly(root='/share/datasets',blend=0.5)
 ambiguousDataLoader = DataLoader(ambiguousDataset, batch_size=64, shuffle=True)
