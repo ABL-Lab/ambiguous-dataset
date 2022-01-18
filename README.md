@@ -32,7 +32,7 @@ git clone https://github.com/ABL-Lab/ambiguous-dataset
 cd ambiguous-dataset 
 pip install -e .   
 pip install -r requirements.txt
-
+```
 
 ## Importing Ambiguous Dataset to your own project
 This project is setup as a package which means you can now easily import any file into any other file like so. Currently only
