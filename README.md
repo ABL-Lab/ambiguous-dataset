@@ -32,35 +32,18 @@ git clone https://github.com/ABL-Lab/ambiguous-dataset
 cd ambiguous-dataset 
 pip install -e .   
 pip install -r requirements.txt
- ```   
- Next, navigate to any file and run it.   
- ```bash
-# module folder
-cd project
-
-# run module (example: mnist as your main contribution)   
-python lit_classifier_main.py    
 ```
 
-## Imports
-This project is setup as a package which means you can now easily import any file into any other file like so:
+## Importing Ambiguous Dataset to your own project
+This project is setup as a package which means you can now easily import any file into any other file like so. Currently only
+MNIST and EMNIST (letter MNIST) are supported. <dataset>_fly means the data is generated on the fly in the data loader, using the CVAE generator.
 ```python
-from project.datasets.mnist import mnist
-from project.lit_classifier_main import LitClassifier
-from pytorch_lightning import Trainer
+from project.dataset.dataset import *
+from project.dataset.dataset import EMNIST_fly, MNIST_fly
 
-# model
-model = LitClassifier()
+ambiguousDataset=EMNIST_fly(root='/share/datasets',blend=0.5)
+ambiguousDataLoader = DataLoader(ambiguousDataset, batch_size=64, shuffle=True)
 
-# data
-train, val, test = mnist()
-
-# train
-trainer = Trainer()
-trainer.fit(model, train, val)
-
-# test using the best model!
-trainer.test(test_dataloaders=test)
 ```
 
 ### Citation   
