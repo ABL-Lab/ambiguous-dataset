@@ -41,7 +41,7 @@ MNIST and EMNIST (letter MNIST) are supported. <dataset>_fly means the data is g
 from project.dataset.dataset import *
 from project.dataset.dataset import EMNIST_fly, MNIST_fly
 
-ambiguousDataset=EMNIST_fly('/share/datasets',blend=0.5)
+ambiguousDataset=EMNIST_fly(root='/share/datasets',blend=0.5)
 ambiguousDataLoader = DataLoader(ambiguousDataset, batch_size=64, shuffle=True)
 
 ```
