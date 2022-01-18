@@ -11,10 +11,10 @@ from torchvision.utils import save_image
 from tqdm import tqdm
 from datetime import datetime
 import yaml
-from project.data_utils import *
-from project.models.ambiguous_generator import *
-import project.models.cvae
-from project.models.cvae import Encoder, Decoder, EMNIST_CVAE
+from ambiguous.data_utils import *
+from ambiguous.models.ambiguous_generator import *
+import ambiguous.models.cvae
+from ambiguous.models.cvae import Encoder, Decoder, EMNIST_CVAE
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -58,7 +58,7 @@ def MNIST_fly(root, blend, pairs=MNIST_pairs):
     blend: ambiguity level (min 0, max 1)
     pairs: ambiguous class pairs, by default = MNIST_PAIRS
     """
-    with open('project/save_dict.yaml','r') as file:
+    with open('ambiguous/save_dict.yaml','r') as file:
         params = yaml.load(file, Loader=yaml.FullLoader)
     n_classes = params['n_classes']
     img_path=params['img']
@@ -83,7 +83,7 @@ def EMNIST_fly(root, blend, pairs=EMNIST_PAIRS):
     blend: ambiguity level (min 0, max 1)
     pairs: ambiguous class pairs, by default = EMNIST_PAIRS
     """
-    with open('project/emnist_params.yaml','r') as file:
+    with open('ambiguous/emnist_params.yaml','r') as file:
         params = yaml.load(file, Loader=yaml.FullLoader)
     n_classes = 26
     latent_dim = 4

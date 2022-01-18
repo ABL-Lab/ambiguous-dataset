@@ -19,7 +19,7 @@ from datetime import datetime
 import yaml
 import h5py
 from copy import deepcopy
-from project.models.cvae import *
+from ambiguous.models.cvae import *
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # Seed for reproducibility
 torch.manual_seed(42)
