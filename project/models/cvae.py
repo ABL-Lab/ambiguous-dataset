@@ -105,7 +105,7 @@ class EMNIST_CVAE(pl.LightningModule):
         sns.scatterplot(x=embed[:,0], y=embed[:,1], hue=targets, palette='deep', legend='full')
         self.logger.experiment.add_figure('Viz/Embedding', fig, self.current_epoch)
         
-    def generate_imgs(self, targets):
+    def generate_imgs(self, outputs):
         targets = outputs[-2]['targets']
         n = targets.size(0)
         c = torch.zeros(n,self.n_classes).to(device)

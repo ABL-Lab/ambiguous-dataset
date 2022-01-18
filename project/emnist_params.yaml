@@ -1,0 +1,4 @@
+{
+ckpt_path: /home/nislah/expectation-clamp/tb_logs/cvae_emnist/version_33/checkpoints/epoch=99-step=156299.ckpt,
+img_path: emnist_examples.pdf
+}

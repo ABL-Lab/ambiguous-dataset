@@ -28,7 +28,7 @@ print(device)
 model_name = 'cvae_emnist' # invertible network
 now = datetime.now()
 timestamp = now.strftime("%Y%m%d_%H%M%S")
-workingDir = f'results/{model_name}_{timestamp}'
+workingDir = f'tb_logs/{model_name}_{timestamp}'
 os.mkdir(workingDir)
 configDict = {
 'workingDir': workingDir,

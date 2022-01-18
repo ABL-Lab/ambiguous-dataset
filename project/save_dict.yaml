@@ -1,0 +1,7 @@
+dec: /home/nislah/vmgr/NSERC/CVAE_decoder.pt
+enc: /home/nislah/vmgr/NSERC/CVAE_encoder.pt
+img: examples.pdf
+mnist: /share/datasets
+readout: results/readout_mlpvae3.pt
+vae: results/MLP_VAE2.pt
+n_classes: 10
