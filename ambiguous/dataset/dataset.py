@@ -103,4 +103,7 @@ def EMNIST_fly(root, blend, pairs=EMNIST_PAIRS):
     dataset = AmbiguousDataset(generator, pairs, blend=blend, n_classes=n_classes)  
     return dataset
 
-
+def save_examples(data_loader, output_file):
+    x,t = next(iter(data_loader))
+    save_image(x, output_file, nrow=8)
+    return
