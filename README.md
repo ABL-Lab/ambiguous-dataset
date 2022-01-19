@@ -40,8 +40,8 @@ MNIST and EMNIST (letter MNIST) are supported. <dataset>_fly means the data is g
 ```python
 from ambiguous.dataset.dataset import *
 from ambiguous.dataset.dataset import EMNIST_fly, MNIST_fly
-
-ambiguousDataset=EMNIST_fly(root='/share/datasets',blend=0.5)
+root = 'path_to_emnist'
+ambiguousDataset=EMNIST_fly(root=root,blend=0.5)
 ambiguousDataLoader = DataLoader(ambiguousDataset, batch_size=64, shuffle=True)
 
 ```
