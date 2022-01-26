@@ -18,7 +18,47 @@ from ambiguous.models.cvae import Encoder, Decoder, EMNIST_CVAE
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-class AmbiguousDataset(Dataset):
+import numpy as np
+from PIL import Image
+import glob
+
+import torch
+from torch.utils.data.dataset import Dataset  # For custom datasets
+MNIST_PAIRS = np.array([(3,8),(8,3),(3,5),(5,3),(5,8),(8,5),(0,6),(6,0)])
+idx = lambda x: 'abcdefghijklmnopqrstuvwxyz'.index(x)
+EMNIST_PAIRS = np.array([(idx('c'), idx('o')), (idx('c'), idx('e'))])
+
+class DatasetFromFile(Dataset):
+    def __init__(self, folder_path):
+        """
+        A dataset example where the class is embedded in the file names
+        This data example also does not use any torch transforms
+        Args:
+            folder_path (string): path to image folder
+        """
+        # Get image list
+        self.image_list = glob.glob(folder_path+'*')
+        # Calculate len
+        self.data_len = len(self.image_list)
+
+    def __getitem__(self, index):
+        # Get image name from the pandas df
+        single_image_path = self.image_list[index]
+        # Open image
+        im_as_im = Image.open(single_image_path)
+        im_as_np = np.asarray(im_as_im)/255
+        im_as_ten = torch.from_numpy(im_as_np).float()
+
+        # Get label(class) of the image based on the file name
+        class_indicator_location = single_image_path.rfind('_c')
+        label = int(single_image_path[class_indicator_location+2:class_indicator_location + 3])
+        return (im_as_ten, label)
+
+    def __len__(self):
+        return self.data_len
+
+
+class AmbiguousDatasetFly(Dataset):
     def __init__(self, generator, pure_pairs, transform=None, target_transform=None, 
                  n=60000, n_classes=10, blend=0.5):
         self.transform = transform
@@ -50,40 +90,38 @@ class AmbiguousDataset(Dataset):
     def set_blend(self, blend):
         self.blend = blend
 
-MNIST_pairs = np.array([(3,8),(8,3),(3,5),(5,3),(5,8),(8,5),(0,6),(6,0)])
 
-def MNIST_fly(root, blend, pairs=MNIST_pairs):
+def MNIST_fly(root, blend, pairs=MNIST_PAIRS, train=True):
     """
     root: data directory
     blend: ambiguity level (min 0, max 1)
     pairs: ambiguous class pairs, by default = MNIST_PAIRS
     """
-    with open('ambiguous/save_dict.yaml','r') as file:
+    with open('/home/nislah/ambiguous-dataset/ambiguous/save_dict.yaml','r') as file:
         params = yaml.load(file, Loader=yaml.FullLoader)
     n_classes = params['n_classes']
     img_path=params['img']
     encoder = torch.load(params['enc']).to(device)
     decoder = torch.load(params['dec']).to(device)
     encoder.eval(),decoder.eval()
-    dataset = datasets.MNIST(root=root, download=True, train=True,
+    dataset = datasets.MNIST(root=root, download=True, train=train,
                              transform=transforms.Compose([transforms.ToTensor()]))
     generator = MNISTGenerator(encoder, decoder, DataLoader(dataset, batch_size=2, shuffle=True),
                                n_classes=n_classes, device=device)
-    dataset = AmbiguousDataset(generator, pairs, n_classes=n_classes, blend=blend)
+    dataset = AmbiguousDatasetFly(generator, pairs, n_classes=n_classes, blend=blend)
     return dataset
 
 
 
-idx = lambda x: 'abcdefghijklmnopqrstuvwxyz'.index(x)
-EMNIST_PAIRS = np.array([(idx('c'), idx('o')), (idx('c'), idx('e'))])
 
-def EMNIST_fly(root, blend, pairs=EMNIST_PAIRS):
+
+def EMNIST_fly(root, blend, pairs=EMNIST_PAIRS, train=True):
     """
     root: data directory
     blend: ambiguity level (min 0, max 1)
     pairs: ambiguous class pairs, by default = EMNIST_PAIRS
     """
-    with open('ambiguous/emnist_params.yaml','r') as file:
+    with open('/home/nislah/ambiguous-dataset/ambiguous/emnist_params.yaml','r') as file:
         params = yaml.load(file, Loader=yaml.FullLoader)
     n_classes = 26
     latent_dim = 4
@@ -96,14 +134,36 @@ def EMNIST_fly(root, blend, pairs=EMNIST_PAIRS):
     model.load_state_dict(ckpt['state_dict'])
     model.eval()
     encoder,decoder = model.encoder,model.decoder
-    dataset = datasets.EMNIST(root=root, download=True, train=True, 
+    dataset = datasets.EMNIST(root=root, download=True, train=train, 
                               split='letters', transform=transforms.Compose([transforms.ToTensor()]))
     generator = EMNISTGenerator(encoder, decoder, DataLoader(dataset, batch_size=2, shuffle=True),
                                 n_classes=n_classes, device=device)
-    dataset = AmbiguousDataset(generator, pairs, blend=blend, n_classes=n_classes)  
+    dataset = AmbiguousDatasetFly(generator, pairs, blend=blend, n_classes=n_classes)  
     return dataset
 
 def save_examples(data_loader, output_file):
     x,t = next(iter(data_loader))
     save_image(x, output_file, nrow=8)
     return
+
+def save_aMNIST_to_file(root, blend, pairs=MNIST_PAIRS, batch_size=100, n_train=60000, n_test=10000):
+    dataset_train = MNIST_fly('/share/datasets', blend=blend, train=True)
+    dataset_test = MNIST_fly('/share/datasets', blend=blend, train=False)
+    trainLoader = DataLoader(dataset_train, batch_size=100, num_workers=0, shuffle=True)
+    testLoader = DataLoader(dataset_test, batch_size=100, num_workers=0)
+    for i in tqdm(range(n_train//batch_size)):
+        x, t = next(iter(trainLoader))
+        x_, t_ = next(iter(testLoader))
+        for j in range(batch_size):
+            cl = torch.where(t[j] == 0.5)[0]
+            torch.save(x[j], root+f'/train/mnist_tr_c{cl[0]}_{cl[1]}.pti')
+            if i < n_test//batch_size:
+                cl = torch.where(t_[j] == 0.5)[0]
+                torch.save(x_[j], root+f'/test/mnist_tr_c{cl[0]}_{cl[1]}.pti')
+    return
+
+def main():
+    return
+    
+    
+##
