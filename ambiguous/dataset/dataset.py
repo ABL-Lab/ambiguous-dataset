@@ -24,7 +24,7 @@ import glob
 
 import torch
 from torch.utils.data.dataset import Dataset  # For custom datasets
-MNIST_PAIRS = np.array([(3,8),(8,3),(3,5),(5,3),(5,8),(8,5),(0,6),(6,0)])
+MNIST_PAIRS = np.array([(3,8),(8,3),(3,5),(5,3),(5,8),(8,5),(0,6),(6,0),(4,9),(9,4),(6,8),(8,6),(5,6),(6,5),(1,7),(7,1)])
 idx = lambda x: 'abcdefghijklmnopqrstuvwxyz'.index(x)
 EMNIST_PAIRS = np.array([(idx('c'), idx('o')), (idx('c'), idx('e'))])
 
@@ -45,13 +45,15 @@ class DatasetFromFile(Dataset):
         # Get image name from the pandas df
         single_image_path = self.image_list[index]
         # Open image
-        im_as_im = Image.open(single_image_path)
-        im_as_np = np.asarray(im_as_im)/255
-        im_as_ten = torch.from_numpy(im_as_np).float()
-
+        #im_as_im = Image.open(single_image_path)
+        #im_as_np = np.asarray(im_as_im)/255
+        #im_as_ten = torch.from_numpy(im_as_np).float()
+        im_as_ten = torch.load(single_image_path).float()
         # Get label(class) of the image based on the file name
         class_indicator_location = single_image_path.rfind('_c')
-        label = int(single_image_path[class_indicator_location+2:class_indicator_location + 3])
+        label1 = int(single_image_path[class_indicator_location+2:class_indicator_location + 3])
+        label2 = int(single_image_path[class_indicator_location+4:class_indicator_location + 5])
+        label = [label1, label2]
         return (im_as_ten, label)
 
     def __len__(self):
@@ -155,11 +157,12 @@ def save_aMNIST_to_file(root, blend, pairs=MNIST_PAIRS, batch_size=100, n_train=
         x, t = next(iter(trainLoader))
         x_, t_ = next(iter(testLoader))
         for j in range(batch_size):
+            idx = i*batch_size+j
             cl = torch.where(t[j] == 0.5)[0]
-            torch.save(x[j], root+f'/train/mnist_tr_c{cl[0]}_{cl[1]}.pti')
+            torch.save(x[j], root+f'/train/mnist_tr_{idx}_c{cl[0]}_{cl[1]}.pti')
             if i < n_test//batch_size:
                 cl = torch.where(t_[j] == 0.5)[0]
-                torch.save(x_[j], root+f'/test/mnist_tr_c{cl[0]}_{cl[1]}.pti')
+                torch.save(x_[j], root+f'/test/mnist_test_{idx}_c{cl[0]}_{cl[1]}.pti')
     return
 
 def main():
