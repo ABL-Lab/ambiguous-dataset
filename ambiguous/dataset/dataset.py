@@ -63,8 +63,8 @@ class aMNIST(Dataset):
 
 
 def save_aMNIST_to_file(root, blend, pairs=MNIST_PAIRS, batch_size=100, n_train=60000, n_test=10000):
-    dataset_train = MNIST_fly('/share/datasets', blend=blend, train=True)
-    dataset_test = MNIST_fly('/share/datasets', blend=blend, train=False)
+    dataset_train = aMNIST_fly('/share/datasets', blend=blend, train=True)
+    dataset_test = aMNIST_fly('/share/datasets', blend=blend, train=False)
     trainLoader = DataLoader(dataset_train, batch_size=100, num_workers=0, shuffle=True)
     testLoader = DataLoader(dataset_test, batch_size=100, num_workers=0)
     for i in tqdm(range(n_train//batch_size)):
@@ -115,7 +115,7 @@ class AmbiguousDatasetFly(Dataset):
         self.blend = blend
 
 
-def MNIST_fly(root, blend, pairs=MNIST_PAIRS, train=True):
+def aMNIST_fly(root, blend, pairs=MNIST_PAIRS, train=True):
     """
     root: data directory
     blend: ambiguity level (min 0, max 1)
@@ -136,7 +136,7 @@ def MNIST_fly(root, blend, pairs=MNIST_PAIRS, train=True):
     return dataset
 
 
-def EMNIST_fly(root, blend, pairs=EMNIST_PAIRS, train=True):
+def aEMNIST_fly(root, blend, pairs=EMNIST_PAIRS, train=True):
     """
     root: data directory
     blend: ambiguity level (min 0, max 1)

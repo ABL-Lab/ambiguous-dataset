@@ -20,7 +20,7 @@ Conference
 </div>
  
 ## Description   
-Ambiguous dataset generation using conditional variational autoencoder (CVAE).  
+This repository contains ambiguous datasets generated using a conditional variational autoencoder (CVAE) approach. The datasets contain images that are ambiguous between a pair of classes. This class interpolation is done by conditional generation through the CVAE with a class-vector and blend factor (0.5) for the desired class. Currently, only MNIST and EMNIST are supported.
 
 ## How to run   
 First, install dependencies   
@@ -35,15 +35,15 @@ pip install -r requirements.txt
 ```
 
 ## Importing Ambiguous Dataset to your own project
-This project is setup as a package which means you can now easily import any file into any other file like so. Currently only
-MNIST and EMNIST (letter MNIST) are supported. <dataset>_fly means the data is generated on the fly in the data loader, using the CVAE generator.
+This project is setup as a package which means you can easily import any file into any other file like so.
 ```python
 from ambiguous.dataset.dataset import *
-from ambiguous.dataset.dataset import EMNIST_fly, MNIST_fly
-root = 'path_to_emnist'
-ambiguousDataset=EMNIST_fly(root=root,blend=0.5)
-ambiguousDataLoader = DataLoader(ambiguousDataset, batch_size=64, shuffle=True)
 
+root = 'root_directory'
+trainset = aMNIST(root=root, download=False, train=True, transform=None)
+testset = aMNIST(root=root, download=False, train=False, transform=None)
+trainloader = DataLoader(trainset, batch_size=64, shuffle=True)
+testloader = DataLoader(testset, batch_size=64, shuffle=False)
 ```
 
 ### Citation   
