@@ -191,7 +191,7 @@ tqdm==4.60.0
 traitlets==5.1.0
 typing-extensions==3.10.0.2
 ujson==5.1.0
-urllib3==1.25.8
+urllib3==1.26.5
 visdom==0.1.8.9
 wcwidth==0.2.5
 webencodings==0.5.1
