@@ -1,5 +1,5 @@
-dec: ambiguous/dataset/CVAE_decoder.pt
-enc: ambiguous/dataset/CVAE_encoder.pt
+dec: /home/nislah/ambiguous-dataset/ambiguous/dataset/CVAE_decoder.pt
+enc: /home/nislah/ambiguous-dataset/ambiguous/dataset/CVAE_encoder.pt
 img: examples.pdf
 mnist: /share/datasets
 n_classes: 10
