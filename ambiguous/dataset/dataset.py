@@ -15,7 +15,8 @@ import numpy as np
 from tqdm import tqdm
 import yaml
 import glob
-import wget
+import subprocess
+import urllib.request
 from torch.utils.data import *
 from torch.utils.data.dataset import Dataset  # For custom datasets
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -34,8 +35,11 @@ class aMNIST(Dataset):
         """
         # Get image list
         if download:
-            url = 'https://drive.google.com/file/d/13onLk6fg7kjrquhh6Xs1dfbArNr-s--B/view'
-            _ = wget.download(url, out=root)
+            if not os.path.isfile(root+'/aMNIST.zip'):
+                print("Downloading dataset...")
+                _ = subprocess.run(['sh', 'download_amnist.sh'])
+            else:
+                print("Using downloaded dataset...")
         if train:
             self.image_list = glob.glob(root+'/MNIST/train/*')
         else:
