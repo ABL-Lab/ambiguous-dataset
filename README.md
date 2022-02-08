@@ -32,13 +32,10 @@ git clone https://github.com/ABL-Lab/ambiguous-dataset
 cd ambiguous-dataset 
 pip install -e .   
 pip install -r requirements.txt
-<<<<<<< HEAD
+
 # download ambiguous datasets (MNIST and EMNIST)
 sh ambiguous/dataset/download_amnist.sh
 sh ambiguous/dataset/download_aemnist.sh
-=======
-sh ambiguous/dataset/download_amnist.sh
->>>>>>> 194f9054d6517f58cc6ae515bd651a0ba47439ba
 ```
 
 ## Importing Ambiguous Dataset to your own project
