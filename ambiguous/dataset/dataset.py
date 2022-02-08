@@ -22,10 +22,14 @@ from torch.utils.data.dataset import Dataset  # For custom datasets
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 MNIST_PAIRS = np.array([(3,8),(8,3),(3,5),(5,3),(5,8),(8,5),(0,6),(6,0),(4,9),(9,4),(6,8),(8,6),(5,6),(6,5),(1,7),(7,1)])
 idx = lambda x: 'abcdefghijklmnopqrstuvwxyz'.index(x)
-EMNIST_PAIRS = np.array([(idx('c'), idx('o')), (idx('c'), idx('e'))])
+EMNIST_PAIRS = np.array([(idx('c'), idx('o')), (idx('c'), idx('e')),
+                        (idx('i'), idx('l')), (idx('k'), idx('x')),
+                        (idx('n'), idx('m')), (idx('v'), idx('w')),
+                        (idx('i'), idx('j')), (idx('u'), idx('v')),
+                        (idx('h'), idx('n')), (idx('h'), idx('b'))])
 
 
-class aMNIST(Dataset):
+class DatasetFromNPY(Dataset):
     def __init__(self, root, download=False, train=True, transform=None):
         """
         A dataset example where the class is embedded in the file names
@@ -34,16 +38,16 @@ class aMNIST(Dataset):
             folder_path (string): path to image folder
         """
         # Get image list
-        if download:
-            if not os.path.isfile(root+'/aMNIST.zip'):
-                print("Downloading dataset...")
-                _ = subprocess.run(['sh', 'download_amnist.sh'])
-            else:
-                print("Using downloaded dataset...")
+        # if download:
+        #     if not os.path.isfile(root+'/aMNIST.zip'):
+        #         print("Downloading dataset...")
+        #         _ = subprocess.run(['sh', 'download_amnist.sh'])
+        #     else:
+        #         print("Using downloaded dataset...")
         if train:
-            self.image_list = glob.glob(root+'/MNIST/train/*')
+            self.image_list = glob.glob(root+'/train/*')
         else:
-            self.image_list = glob.glob(root+'/MNIST/test/*')
+            self.image_list = glob.glob(root+'/test/*')
         # Calculate len
         self.data_len = len(self.image_list)
         self.transform = transform
@@ -56,9 +60,11 @@ class aMNIST(Dataset):
         if self.transform:
             im_as_ten = self.transform(im_as_ten)
         # Get label(class) of the image based on the file name
-        class_indicator_location = single_image_path.rfind('_c')
-        label1 = int(single_image_path[class_indicator_location+2:class_indicator_location + 3])
-        label2 = int(single_image_path[class_indicator_location+4:class_indicator_location + 5])
+        start_idx = single_image_path.rfind('_c') + 2
+        end_idx = single_image_path.rfind('.npy')
+        split_idx = single_image_path[start_idx:end_idx].rfind('_')
+        label1 = int(single_image_path[start_idx:start_idx+split_idx])
+        label2 = int(single_image_path[start_idx+split_idx+1:end_idx])
         label = [label1, label2]
         return (im_as_ten, label)
 
@@ -66,9 +72,18 @@ class aMNIST(Dataset):
         return self.data_len
 
 
-def save_aMNIST_to_file(root, blend, pairs=MNIST_PAIRS, batch_size=100, n_train=60000, n_test=10000):
-    dataset_train = aMNIST_fly('/share/datasets', blend=blend, train=True)
-    dataset_test = aMNIST_fly('/share/datasets', blend=blend, train=False)
+def save_dataset_to_file(dataset_name, og_root, new_root, blend, batch_size=100, n_train=60000, n_test=10000):
+    if not os.path.isdir(new_root):
+        os.makedirs(new_root+'/train/')
+        os.makedirs(new_root+'/test/')
+    if dataset_name == 'MNIST':
+        dataset_train = aMNIST_fly(og_root, blend=blend, train=True)
+        dataset_test = aMNIST_fly(og_root, blend=blend, train=False)
+        pairs = MNIST_PAIRS
+    elif dataset_name == 'EMNIST':
+        dataset_train = aEMNIST_fly(og_root, blend=blend, train=True)
+        dataset_test = aEMNIST_fly(og_root, blend=blend, train=False)
+        pairs = EMNIST_PAIRS
     trainLoader = DataLoader(dataset_train, batch_size=100, num_workers=0, shuffle=True)
     testLoader = DataLoader(dataset_test, batch_size=100, num_workers=0)
     for i in tqdm(range(n_train//batch_size)):
@@ -79,10 +94,10 @@ def save_aMNIST_to_file(root, blend, pairs=MNIST_PAIRS, batch_size=100, n_train=
         for j in range(batch_size):
             idx = i*batch_size+j
             cl = np.where(t[j] == 0.5)[0]
-            np.save(root+f'/train/mnist_tr_{idx}_c{cl[0]}_{cl[1]}.npy', x[j])
+            np.save(new_root+f'/train/tr_{idx}_c{cl[0]}_{cl[1]}.npy', x[j])
             if i < n_test//batch_size:
                 cl = np.where(t_[j] == 0.5)[0]
-                np.save(root+f'/test/mnist_test_{idx}_c{cl[0]}_{cl[1]}.npy', x_[j])
+                np.save(new_root+f'/test/test_{idx}_c{cl[0]}_{cl[1]}.npy', x_[j])
     return
 
 

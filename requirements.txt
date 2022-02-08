@@ -205,3 +205,4 @@ xeus-python==0.12.3
 yapf==0.32.0
 yarl==1.6.3
 zipp==3.5.0
+gdown

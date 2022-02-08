@@ -32,6 +32,9 @@ git clone https://github.com/ABL-Lab/ambiguous-dataset
 cd ambiguous-dataset 
 pip install -e .   
 pip install -r requirements.txt
+# download ambiguous datasets (MNIST and EMNIST)
+sh ambiguous/dataset/download_amnist.sh
+sh ambiguous/dataset/download_aemnist.sh
 ```
 
 ## Importing Ambiguous Dataset to your own project
@@ -39,9 +42,9 @@ This project is setup as a package which means you can easily import any file in
 ```python
 from ambiguous.dataset.dataset import *
 
-root = 'root_directory'
-trainset = aMNIST(root=root, download=False, train=True, transform=None)
-testset = aMNIST(root=root, download=False, train=False, transform=None)
+root = 'path_to_ambiguous_dataset'
+trainset = DatasetFromNPY(root=root, download=False, train=True, transform=None)
+testset = DatasetFromNPY(root=root, download=False, train=False, transform=None)
 trainloader = DataLoader(trainset, batch_size=64, shuffle=True)
 testloader = DataLoader(testset, batch_size=64, shuffle=False)
 ```
