@@ -72,18 +72,20 @@ class DatasetFromNPY(Dataset):
         return self.data_len
 
 
-def save_dataset_to_file(dataset_name, og_root, new_root, blend, batch_size=100, n_train=60000, n_test=10000):
+def save_dataset_to_file(dataset_name, og_root, new_root, blend, pairs=None, batch_size=100, n_train=60000, n_test=10000):
     if not os.path.isdir(new_root):
         os.makedirs(new_root+'/train/')
         os.makedirs(new_root+'/test/')
     if dataset_name == 'MNIST':
-        dataset_train = aMNIST_fly(og_root, blend=blend, train=True)
-        dataset_test = aMNIST_fly(og_root, blend=blend, train=False)
-        pairs = MNIST_PAIRS
+        if pairs is None:
+            pairs = MNIST_PAIRS
+        dataset_train = aMNIST_fly(og_root, pairs=pairs, blend=blend, train=True)
+        dataset_test = aMNIST_fly(og_root, pairs=pairs, blend=blend, train=False)
     elif dataset_name == 'EMNIST':
-        dataset_train = aEMNIST_fly(og_root, blend=blend, train=True)
-        dataset_test = aEMNIST_fly(og_root, blend=blend, train=False)
-        pairs = EMNIST_PAIRS
+        if pairs is None:
+            pairs = EMNIST_PAIRS
+        dataset_train = aEMNIST_fly(og_root, pairs=pairs, blend=blend, train=True)
+        dataset_test = aEMNIST_fly(og_root, pairs=pairs, blend=blend, train=False)
     trainLoader = DataLoader(dataset_train, batch_size=100, num_workers=0, shuffle=True)
     testLoader = DataLoader(dataset_test, batch_size=100, num_workers=0)
     for i in tqdm(range(n_train//batch_size)):
