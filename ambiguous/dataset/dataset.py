@@ -166,8 +166,8 @@ def aEMNIST_fly(root, blend, pairs=EMNIST_PAIRS, train=True):
         params = yaml.load(file, Loader=yaml.FullLoader)
     n_classes = 26
     latent_dim = 4
-    enc_layers = [28*28, 512]
-    dec_layers = [512, 28*28]
+    enc_layers = [28*28, 1024, 1024]
+    dec_layers = [1024, 1024, 28*28]
     ckpt_path = params['ckpt_path']
     model = EMNIST_CVAE(latent_dim, enc_layers, dec_layers, n_classes=26, conditional=True).to(device)
     ckpt = torch.load(ckpt_path)
@@ -176,7 +176,7 @@ def aEMNIST_fly(root, blend, pairs=EMNIST_PAIRS, train=True):
     encoder, decoder = model.encoder, model.decoder
     dataset = datasets.EMNIST(root=root, download=True, train=train, 
                               split='byclass', transform=transforms.Compose([transforms.ToTensor()]))
-    dataset = partition_dataset(dataset, range(36, 62))
+    dataset = partition_dataset(dataset, range(10, 36))
     generator = EMNISTGenerator(encoder, decoder, DataLoader(dataset, batch_size=2, shuffle=True),
                                 n_classes=n_classes, device=device)
     dataset = AmbiguousDatasetFly(generator, pairs, blend=blend, n_classes=n_classes)  
