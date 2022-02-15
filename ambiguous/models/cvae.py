@@ -67,12 +67,12 @@ class EMNIST_CVAE(pl.LightningModule):
     def loss(self, x, rec, mu, logvar):
         KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
         rec_error = F.binary_cross_entropy(rec, x, reduction='sum')
-        return (KLD + rec_error) / x.size(0) 
+        return (KLD + rec_error) / x.size(0)
     
     def training_step(self, batch, batch_idx):
         x, t = batch
         _,c,h,w = x.shape
-        x, t = x.to(device), t.to(device) - 1
+        x, t = x.to(device), t.to(device)
         c = torch.zeros(x.size(0),self.n_classes).to(device)
         c[range(x.size(0)), t] = 1
         mu, logvar = self.encoder(x.view(-1, 784), c)
@@ -86,7 +86,7 @@ class EMNIST_CVAE(pl.LightningModule):
         with torch.no_grad():
             x, t = batch
             _,c,h,w = x.shape
-            x, t = x.to(device), t.to(device) - 1
+            x, t = x.to(device), t.to(device)
             c = torch.zeros(x.size(0),self.n_classes).to(device)
             c[range(x.size(0)), t] = 1
             mu, logvar = self.encoder(x.view(-1, 784), c)
