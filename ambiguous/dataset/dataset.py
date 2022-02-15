@@ -73,9 +73,8 @@ class DatasetFromNPY(Dataset):
 
 
 def save_dataset_to_file(dataset_name, og_root, new_root, blend, pairs=None, batch_size=100, n_train=60000, n_test=10000):
-    if not os.path.isdir(new_root):
-        os.makedirs(new_root+'/train/')
-        os.makedirs(new_root+'/test/')
+    os.makedirs(new_root+'/train/')
+    os.makedirs(new_root+'/test/')
     if dataset_name == 'MNIST':
         if pairs is None:
             pairs = MNIST_PAIRS
@@ -176,11 +175,19 @@ def aEMNIST_fly(root, blend, pairs=EMNIST_PAIRS, train=True):
     model.eval()
     encoder, decoder = model.encoder, model.decoder
     dataset = datasets.EMNIST(root=root, download=True, train=train, 
-                              split='letters', transform=transforms.Compose([transforms.ToTensor()]))
+                              split='byclass', transform=transforms.Compose([transforms.ToTensor()]))
+    dataset = partition_dataset(dataset, range(36, 62))
     generator = EMNISTGenerator(encoder, decoder, DataLoader(dataset, batch_size=2, shuffle=True),
                                 n_classes=n_classes, device=device)
     dataset = AmbiguousDatasetFly(generator, pairs, blend=blend, n_classes=n_classes)  
     return dataset
+
+
+def partition_dataset(dataset, t):
+    newdataset = copy.copy(dataset)
+    newdataset.data = [im for im, label in zip(newdataset.data, newdataset.targets) if label in t]
+    newdataset.targets = [label - min(t) for label in newdataset.targets if label in t]
+    return newdataset
 
 
 def save_examples(data_loader, output_file):
