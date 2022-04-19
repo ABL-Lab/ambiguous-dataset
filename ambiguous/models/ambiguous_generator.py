@@ -51,15 +51,15 @@ class AmbiguousGenerator:
         plt.axis('off')
         return   
     
-    def eval_cls_interpolation(self, net, c1, c2, interpolation, n_eval=256):
+    def eval_cls_interpolation(self, net, c1, c2, interpolation, n_eval=256, label_offset=0):
         pct_c1 = torch.zeros_like(interpolation)
         pct_c2 = torch.zeros_like(pct_c1)
         pct_other = torch.zeros_like(pct_c2)
-        for i, x in enumerate(interpolation):
-            _, mu, c1, c2 = self.generate_ambiguous(n_eval, x, x, c1, c2)
-            pred = predict_cls(mnist_net, mu)
-            pct_c1[i] = torch.sum(pred==c1)/len(pred)
-            pct_c2[i] = torch.sum(pred==c2)/len(pred)
+        for i, blend in enumerate(interpolation):
+            _, rec, c1, c2 = self.generate_ambiguous(n_eval, blend, c1, c2)
+            pred = net(rec)
+            pct_c1[i] = torch.sum(pred==c1+label_offset)/len(pred)
+            pct_c2[i] = torch.sum(pred==c2+label_offset)/len(pred)
             pct_other[i] = 1-pct_c1[i]-pct_c2[i]
         return pct_c1, pct_c2, pct_other
 
@@ -109,10 +109,10 @@ class EMNISTGenerator(AmbiguousGenerator):
         rec = self.decoder(z, prior).view(-1,1,h,h)
         return x, rec, c1, c2
 
-def psychometric_curves(gen, mnist_net):
+def psychometric_curves(gen, net, n_classes=10, label_offset=0):
     interpolation = torch.arange(0,1.01,0.05)
     N=10
-    pairs = [[(x,y) for y in range(x+1, N)] for x in range(N)]
+    pairs = [[(x,y) for y in range(x+1, n_classes)] for x in range(n_classes)]
     pairs = list(chain(*pairs))
     fig,ax = plt.subplots(len(pairs), figsize=(10,80))
     plt.tight_layout()
@@ -120,7 +120,7 @@ def psychometric_curves(gen, mnist_net):
     p_c1 = torch.zeros((len(pairs), interpolation.size(0)))
     p_c2, p_other = torch.zeros_like(p_c1), torch.zeros_like(p_c1)
     for i,(a,b) in enumerate(pairs):
-        p_c1[i], p_c2[i], p_other[i] = eval_cls_interpolation(mnist_net, gen, a,b, interpolation)
+        p_c1[i], p_c2[i], p_other[i] = gen.eval_cls_interpolation(net, a,b, interpolation, label_offset=label_offset)
         ax[i].plot(p_c1[i]); ax[i].plot(p_c2[i]); ax[i].plot(p_other[i])
         ax[i].set_title(f"{a}-{b} interpolation")
         ax[0].legend(['class 1', 'class 2', 'other'])

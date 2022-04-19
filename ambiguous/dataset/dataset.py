@@ -162,7 +162,7 @@ def aEMNIST_fly(root, blend, pairs=EMNIST_PAIRS, train=True):
     blend: ambiguity level (min 0, max 1)
     pairs: ambiguous class pairs, by default = EMNIST_PAIRS
     """
-    with open('/home/nislah/ambiguous-dataset/ambiguous/emnist_params.yaml','r') as file:
+    with open('/home/mila/n/nizar.islah/ambiguous-dataset/ambiguous/emnist_params.yaml','r') as file:
         params = yaml.load(file, Loader=yaml.FullLoader)
     n_classes = 26
     latent_dim = 4
