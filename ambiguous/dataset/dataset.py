@@ -63,9 +63,13 @@ class DatasetFromNPY(Dataset):
         start_idx = single_image_path.rfind('_c') + 2
         end_idx = single_image_path.rfind('.npy')
         split_idx = single_image_path[start_idx:end_idx].rfind('_')
-        label1 = int(single_image_path[start_idx:start_idx+split_idx])
-        label2 = int(single_image_path[start_idx+split_idx+1:end_idx])
-        label = [label1, label2]
+        if split_idx == -1: # If only one class (unambiguous)
+            label1 = int(single_image_path[start_idx:end_idx])
+            label = [label1]
+        else: # If two classes (ambiguous)
+            label1 = int(single_image_path[start_idx:start_idx+split_idx])
+            label2 = int(single_image_path[start_idx+split_idx+1:end_idx])
+            label = [label1, label2]
         return (im_as_ten, label)
 
     def __len__(self):
@@ -94,11 +98,17 @@ def save_dataset_to_file(dataset_name, og_root, new_root, blend, pairs=None, bat
         x_, t_ = (255*x_).cpu().detach().numpy().astype(np.uint8), t_.cpu().detach().numpy()
         for j in range(batch_size):
             idx = i*batch_size+j
-            cl = np.where(t[j] == 0.5)[0]
-            np.save(new_root+f'/train/tr_{idx}_c{cl[0]}_{cl[1]}.npy', x[j])
+            cl = np.where(t[j] > 0)[0]
+            if len(cl)>1:
+                np.save(new_root+f'/train/tr_{idx}_c{cl[0]}_{cl[1]}.npy', x[j])
+            elif len(cl)==1:
+                np.save(new_root+f'/train/tr_{idx}_c{cl[0]}.npy', x[j])
             if i < n_test//batch_size:
-                cl = np.where(t_[j] == 0.5)[0]
-                np.save(new_root+f'/test/test_{idx}_c{cl[0]}_{cl[1]}.npy', x_[j])
+                cl = np.where(t_[j] > 0)[0]
+                if len(cl)>1:
+                    np.save(new_root+f'/test/test_{idx}_c{cl[0]}_{cl[1]}.npy', x_[j])
+                elif len(cl)==1:
+                    np.save(new_root+f'/test/test_{idx}_c{cl[0]}.npy', x_[j])
     return
 
 
