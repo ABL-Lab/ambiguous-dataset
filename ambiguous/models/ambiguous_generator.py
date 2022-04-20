@@ -111,7 +111,6 @@ class EMNISTGenerator(AmbiguousGenerator):
 
 def psychometric_curves(gen, net, n_classes=10, label_offset=0):
     interpolation = torch.arange(0,1.01,0.05)
-    N=10
     pairs = [[(x,y) for y in range(x+1, n_classes)] for x in range(n_classes)]
     pairs = list(chain(*pairs))
     fig,ax = plt.subplots(len(pairs), figsize=(10,80))

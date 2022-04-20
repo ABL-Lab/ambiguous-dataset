@@ -80,6 +80,7 @@ class EMNIST_CVAE(pl.LightningModule):
         rec = self.decoder(z, c).view(-1, 1, 28, 28)
         loss = self.loss(x, rec, mu, logvar)
         batch_dictionary={'loss':loss, 'mu': mu, 'targets': t}
+        self.logger.log_metrics({'Loss/TrainStream': loss.item()}, step=self.global_step)
         return batch_dictionary      
     
     def validation_step(self, batch, batch_idx):
@@ -94,6 +95,7 @@ class EMNIST_CVAE(pl.LightningModule):
             rec = self.decoder(z, c).view(-1, 1, 28, 28)
             loss = self.loss(x, rec, mu, logvar)
         batch_dictionary={'loss':loss, 'mu': mu, 'targets': t}
+        self.logger.log_metrics({'Loss/ValStream': loss.item()}, step=self.global_step)
         return batch_dictionary
     
     def embedding_figure_adder(self, outputs):
@@ -101,9 +103,12 @@ class EMNIST_CVAE(pl.LightningModule):
         targets = torch.cat([x['targets'] for x in outputs[-100:]], dim=0).cpu().detach().numpy()
         embed = TSNE(2).fit_transform(mu.cpu().detach().numpy())
         fig = plt.figure()
-        sns.set(rc={'figure.figsize':(6,6)})
+        sns.set(rc={'figure.figsize':(12,12)})
         sns.scatterplot(x=embed[:,0], y=embed[:,1], hue=targets, palette='deep', legend='full')
-        self.logger.experiment.add_figure('Viz/Embedding', fig, self.current_epoch)
+        fig.savefig("embedding.png")
+        plt.close(fig)
+#         self.logger.experiment.add_figure('Viz/Embedding', fig, self.current_epoch)
+        self.logger.log_image(key=f'Viz/Embedding', images=['embedding.png'])
         
     def generate_imgs(self, outputs):
         targets = outputs[-2]['targets']
@@ -112,17 +117,20 @@ class EMNIST_CVAE(pl.LightningModule):
         c[range(n), targets] = 1
         z = torch.randn(n, self.latent_dim).to(device)
         rec = self.decoder(z, c).view(-1, 1, 28, 28)
-        grid = make_grid(rec, nrow=8)
-        self.logger.experiment.add_image('Viz/Reconstruction', grid, self.current_epoch)
+        torchvision.utils.save_image(rec, "reconstruction.png", nrow=8)
+        #self.logger.experiment.add_image('Viz/Reconstruction', grid, self.current_epoch)
+        self.logger.log_image(key=f'Viz/Reconstruction', images=["reconstruction.png"])
     
     def training_epoch_end(self, outputs):
         avg_loss = torch.stack([x['loss'] for x in outputs]).mean()
-        self.logger.experiment.add_scalar('Loss/Train', avg_loss, self.current_epoch)
+        #self.logger.experiment.add_scalar('Loss/Train', avg_loss, self.current_epoch)
+        self.logger.log_metrics({'Loss/Train': avg_loss.item()}, step=self.current_epoch)
         epoch_dictionary = {'loss': avg_loss}
     
     def validation_epoch_end(self, outputs):
         avg_loss = torch.stack([x['loss'] for x in outputs]).mean()
-        self.logger.experiment.add_scalar('Loss/Val', avg_loss, self.current_epoch)
+#         self.logger.experiment.add_scalar('Loss/Val', avg_loss, self.current_epoch)
+        self.logger.log_metrics({'Loss/Val': avg_loss.item()}, step=self.current_epoch)
         epoch_dictionary = {'loss': avg_loss}
         self.embedding_figure_adder(outputs)
         self.generate_imgs(outputs)
@@ -188,3 +196,32 @@ class EMNIST_Decoder(nn.Module):
             z = torch.cat([z, c], 1)
         rec = self.MLP(z)
         return rec   
+
+    
+class EMNIST_EncoderV1(nn.Module):
+    def __init__(self, latent_dim, layer_sizes):
+        super(EMNIST_EncoderV1, self).__init__()
+        self.MLP = nn.Sequential()
+        for i, (in_size, out_size) in enumerate(zip(layer_sizes[:-1], layer_sizes[1:])):
+            self.MLP.add_module(
+                name="L{:d}".format(i), module=nn.Linear(in_size, out_size))
+            self.MLP.add_module(name="A{:d}".format(i), module=nn.ReLU())
+        self.fc_mu = nn.Linear(layer_sizes[-1], latent_dim)
+        self.fc_logvar = nn.Linear(layer_sizes[-1], latent_dim)
+        
+        self.device = device
+        
+    def forward(self, x):     
+        h = self.MLP(x)
+        mu, logvar = self.fc_mu(h), self.fc_logvar(h)
+        return mu, logvar
+
+    def sample(self, mu, logvar):
+        std = logvar.mul(0.5).exp_()
+        if self.device == 'cuda':
+            eps = torch.cuda.FloatTensor(std.size()).normal_()
+        else:
+            eps = torch.FloatTensor(std.size()).normal_()
+        return eps.mul(std).add_(mu)
+    
+    
