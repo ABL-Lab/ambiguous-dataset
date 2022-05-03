@@ -1,5 +1,5 @@
-dec: /home/nislah/ambiguous-dataset/ambiguous/dataset/CVAE_decoder.pt
-enc: /home/nislah/ambiguous-dataset/ambiguous/dataset/CVAE_encoder.pt
+dec: /Users/guillaume/Documents/code/ambiguous-dataset/ambiguous/dataset/CVAE_decoder.pt
+enc: /Users/guillaume/Documents/code/ambiguous-dataset/ambiguous/dataset/CVAE_encoder.pt
 img: examples.pdf
-mnist: /share/datasets
+mnist: /Users/guillaume/Documents/code/datasets
 n_classes: 10

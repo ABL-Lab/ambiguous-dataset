@@ -151,7 +151,7 @@ def aMNIST_fly(root, blend, pairs=MNIST_PAIRS, train=True):
     blend: ambiguity level (min 0, max 1)
     pairs: ambiguous class pairs, by default = MNIST_PAIRS
     """
-    with open('/home/nislah/ambiguous-dataset/ambiguous/save_dict.yaml','r') as file:
+    with open('../save_dict.yaml','r') as file:
         params = yaml.load(file, Loader=yaml.FullLoader)
     n_classes = params['n_classes']
     img_path = params['img']
@@ -172,7 +172,7 @@ def aEMNIST_fly(root, blend, pairs=EMNIST_PAIRS, train=True):
     blend: ambiguity level (min 0, max 1)
     pairs: ambiguous class pairs, by default = EMNIST_PAIRS
     """
-    with open('/home/mila/n/nizar.islah/ambiguous-dataset/ambiguous/emnist_params.yaml','r') as file:
+    with open('../emnist_params.yaml','r') as file:
         params = yaml.load(file, Loader=yaml.FullLoader)
     n_classes = 26
     latent_dim = 4
