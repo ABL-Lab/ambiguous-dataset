@@ -1,30 +1,19 @@
 import os
-import importlib
-import numpy as np
 import matplotlib.pyplot as plt
-import time
-import torchvision
 import seaborn as sns
 import numpy as np
-import pytorch_lightning as pl
+import torch
 import torch.nn.functional as F
-import torchvision
 from torchvision import datasets, transforms
 from torch import nn, optim
 from torch.utils.data import DataLoader
-from torchvision.utils import save_image
-import torch
 from tqdm import tqdm
-from datetime import datetime
-import yaml
 import h5py
-from copy import deepcopy
-import ambiguous.models.cvae
 from ambiguous.models.vae import MLPVAE
 from ambiguous.models.readout import *
 from ambiguous.dataset.dataset import partition_dataset
 import argparse
-from sklearn.embed import TSNE
+from sklearn.manifold import TSNE
 
 def plot_reconstruction(plot_path, model, dataloader, device='cuda'):
     images, labels = next(iter(dataloader))
@@ -45,9 +34,8 @@ def plot_reconstruction(plot_path, model, dataloader, device='cuda'):
 def latent_space_viz(plot_path, model, data_loader, N=1000, device='cuda'):
     batch = torch.cat([data_loader.dataset[x][0] for x in range(N)], 0)
     labels = torch.Tensor([data_loader.dataset[x][1] for x in range(N)])
-    _, _, mu, _  = model(batch.view(-1,1,32,32).to(device))
-    mu_2d = mu.cpu().detach().numpy()
-    mu_2d = TSNE(2).fit_transform(mu_2d)
+    _, mu, _, _  = model(batch.view(-1,1,model.img_size,model.img_size).to(device))
+    mu_2d = TSNE(2).fit_transform(mu.cpu().detach().numpy())
     fig=plt.figure()
     sns.set(rc={'figure.figsize':(10,8)})
     sns.scatterplot(x=mu_2d[:,0], y=mu_2d[:,1], hue=labels, palette='deep', legend='full')
@@ -100,6 +88,9 @@ def main():
     print(device)
     root=data_path
 
+    torch.cuda.empty_cache()
+    torch.cuda.init()
+
     transform = transforms.Compose([
         transforms.ToTensor()
     ])
@@ -107,9 +98,9 @@ def main():
     train_set, val_set = torch.utils.data.random_split(dataset, [round(0.8*len(dataset)), round(0.2*len(dataset))])
     test_set = datasets.MNIST(root=root, download=True, train=False, transform=transform)
     # Dataloaders
-    train_loader = DataLoader(train_set, batch_size=batch_size, num_workers=2, shuffle=True)
-    val_loader = DataLoader(val_set, batch_size=batch_size, num_workers=2)
-    test_loader = DataLoader(test_set, batch_size=batch_size, num_workers=2)
+    train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
+    val_loader = DataLoader(val_set, batch_size=batch_size)
+    test_loader = DataLoader(test_set, batch_size=batch_size)
 
     def loss_function(rec, x, mu, logvar, criterion):
         KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
@@ -117,9 +108,7 @@ def main():
         return KLD + rec_error
 
     if train_vae:
-        model = MLPVAE(
-        latent_dim = latent_dim
-        ).to(device)
+        model = MLPVAE(latent_dim = latent_dim, input_img_size=img_size).to(device)
         print(model)
         optimizer = torch.optim.Adam(model.parameters(), lr=lr)
         criterion = nn.MSELoss(reduction='sum')
@@ -130,7 +119,7 @@ def main():
             for _, (images, labels) in enumerate(train_loader):
                 images = images.to(device)
                 labels = labels.to(device)
-                rec, mu, logvar = model(images)
+                rec, mu, logvar, _ = model(images)
                 loss = loss_function(rec, images, mu, logvar, criterion)
                 running_loss += loss/batch_size
                 optimizer.zero_grad()
@@ -142,23 +131,21 @@ def main():
                 with torch.no_grad():
                     images = images.to(device)
                     labels = labels.to(device)
-                    rec, mu, logvar = model(images)
+                    rec, mu, logvar, _ = model(images)
                     loss = loss_function(rec, images, mu, logvar, criterion)
                     val_loss += loss/batch_size
             print(f"Epoch: {i+1} \t Train Loss: {running_loss/n_train:.2f} \t Val Loss: {val_loss/n_val:.2f}")
 
             torch.save(model.state_dict(), vae_path)
     else:
-        model = MLPVAE(latent_dim = latent_dim).to(device)
+        model = MLPVAE(latent_dim = latent_dim, input_img_size=img_size).to(device)
         model.load_state_dict(torch.load(vae_path))
         model.eval()
         print(model)
 
     if plot_vae:
-        latent_space_viz(model, train_loader, 2000)
-        latent_space_viz(model, val_loader, 2000)
-        plot_reconstruction(model, train_loader)
-        plot_reconstruction(model, val_loader)
+        latent_space_viz(latent_plot_path, model, val_loader, 2000)
+        plot_reconstruction(recon_plot_path, model, val_loader)
 
     if train_readout:
         readout = Readout(latent_dim=latent_dim, h=readout_h_dim, n_classes=n_cls).to(device)
