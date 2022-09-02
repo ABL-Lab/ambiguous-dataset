@@ -5,6 +5,7 @@ import torchvision
 from torch import nn, optim
 from datetime import datetime
 from ambiguous.data_utils import *
+from ambiguous.adversarial import *
 from ambiguous.models.ambiguous_generator import *
 import ambiguous.models.cvae
 from ambiguous.models.cvae import Encoder, Decoder, EMNIST_CVAE
@@ -112,6 +113,67 @@ def save_dataset_to_file(dataset_name, og_root, new_root, blend, pairs=None, bat
     return
 
 
+def to_numpy_uint8(x):
+    """x: tensor"""
+    return (255*x).cpu().detach().numpy().astype(np.uint8)
+
+
+def to_numpy(t):
+    return t.cpu().detach().numpy()
+
+
+def save_EMNIST_adversarial(vae, readout, dataloader, dataset_name, og_root, new_root, batch_size, h=28, train=True):
+    """
+    vae: emnist cvae
+    readout: emnist readout
+    dataloader: emnist dataloader
+    dataset_name: name of newdataset
+    og_root: emnist location
+    new_root: newdataset location
+    """
+    train = 'train' if train else 'test'
+    os.makedirs(new_root+f'/{train}', exist_ok=True)
+    
+    for batch_idx, (inputs, targets) in tqdm(enumerate(dataloader)):
+        inputs, targets = inputs.cuda(), targets.cuda()
+        even = torch.arange(0,len(targets),2)
+        odd = torch.arange(1,len(targets),2)
+        t_even = torch.index_select(t, 0, even).to(device)
+        t_odd = torch.index_select(t, 0, odd).to(device) 
+        attacked_inputs_even, attacked_targets_even = generate_adversarial(vae, readout, inputs[even], t_even, t_odd)
+        attacked_inputs_odd, attacked_targets_odd = generate_adversarial(vae, readout, inputs[odd], t_odd, t_even)
+        t_even, t_odd = to_numpy(t_even), to_numpy(t_odd)
+        attacked_targets_even, attacked_targets_odd = to_numpy(attacked_targets_even), to_numpy(attacked_targets_odd)
+        
+#       if you want the best for sure
+#         _, attacked_mu, _ = vae(attacked_inputs)
+#         attack_out = readout(attacked_mu)
+#         pred = torch.argmax(attack_out, 1)
+#         topk=F.softmax(attack_out).topk(2)[0]
+#         best_adv = topk[:,1]>0.3
+#         best_adv_inputs = attacked_inputs[best_adv]
+#         best_adv_targets = attacked_targets[best_adv]
+#         num_adv = len(best_adv)
+        print(attacked_inputs_even.size(0),attacked_inputs_odd.size(0))
+        combined_inputs = torch.zeros(1, h*2, h*2).to(device)
+        for i in range(batch_size//2):
+            idx = batch_idx*batch_size+i
+            combined_inputs[:, 0:h, 0:h] = inputs[even][i]
+            combined_inputs[:, 0:h, h:2*h] = inputs[odd][i]
+            combined_inputs[:, h:2*h, 0:h] = attacked_inputs_even[i]
+            combined_inputs[:, h:2*h, h:2*h] = attacked_inputs_odd[i]
+            combined_inputs = to_numpy_uint8(combined_inputs)
+            t = np.array([ [t_even[i], t_odd[i]], [attacked_targets_even[i], attacked_targets_odd[i]] ])
+            t_flat = t.flatten()
+            img_loc = new_root+f'/{train}/img_{idx}.npy'
+            tgt_loc = new_root+f'/{train}/tgt_{idx}.npy'
+            np.save(img_loc, combined_inputs)
+            np.save(tgt_loc, t)
+            
+    return
+
+
+
 class AmbiguousDatasetFly(Dataset):
     def __init__(self, generator, pure_pairs, transform=None, target_transform=None, 
                  n=60000, n_classes=10, blend=0.5):
@@ -143,7 +205,7 @@ class AmbiguousDatasetFly(Dataset):
     
     def set_blend(self, blend):
         self.blend = blend
-
+        
 
 def aMNIST_fly(root, blend, pairs=MNIST_PAIRS, train=True):
     """

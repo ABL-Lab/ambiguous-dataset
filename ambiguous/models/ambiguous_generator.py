@@ -23,13 +23,7 @@ import torch.nn.functional as F
 
 device='cuda'
 
-class AmbiguousGenerator:
-    def __init__(self, encoder, decoder, data_loader, device, n_classes=10):
-        self.encoder = encoder
-        self.decoder = decoder
-        self.device = device
-        self.n_classes = n_classes
-        self.data_loader = data_loader        
+class AmbiguousGenerator:      
 
     def init_prior(self, n, num, c1, c2):
         prior = torch.zeros(n, self.n_classes, device=self.device)
@@ -89,25 +83,24 @@ def transform_logit(y):
     return torch.exp(y)/(1+torch.exp(y))     
 
 class EMNISTGenerator(AmbiguousGenerator):
-    def __init__(self, encoder, decoder, dataloader, device, n_classes=10):
-        super(AmbiguousGenerator, self).__init__()
-        self.encoder = encoder
-        self.decoder = decoder
+    def __init__(self, cvae, n_latent, n_classes=26):
+        super(EMNISTGenerator, self).__init__()
+        self.cvae = cvae
         self.device = device
         self.n_classes = n_classes
-        self.data_loader = dataloader
+        self.n_latent = n_latent
         
-    def generate_ambiguous(self, N, blend=0.5, c1=None, c2=None, h=28):
-        x, t = next(iter(self.data_loader)) 
-        x = x.view(-1,h*h).to(self.device)
-        x = x[:N]
-        c1 = torch.zeros((N,), dtype=torch.long).to(self.device) + c1
-        c2 = torch.zeros((N,), dtype=torch.long).to(self.device) + c2
-        prior = self.init_prior(N, blend, c1, c2)
-        mu, logvar = self.encoder(x, prior)
-        z  = self.encoder.sample(mu, logvar)
-        rec = self.decoder(z, prior).view(-1,1,h,h)
-        return x, rec, c1, c2
+    def generate_ambiguous(self, n_samples, blend, c1, c2, h=28):
+        c = torch.zeros(n_samples, self.n_classes, dtype=torch.long).to(device)
+        a = torch.zeros(n_samples, dtype=torch.long).to(device) + c1
+        b = torch.zeros(n_samples, dtype=torch.long).to(device) + c2
+        c[range(n_samples), a.long()] = float(blend)
+        c[range(n_samples), b.long()] = float(1-blend)
+        z = torch.randn(n_samples, self.n_latent).to(device)
+        rec = self.cvae.decoder(z, c).view(-1, 1, 28, 28)
+        return 0,rec,c1,c2
+    
+    
 
 def psychometric_curves(gen, net, n_classes=10, label_offset=0):
     interpolation = torch.arange(0,1.01,0.05)
