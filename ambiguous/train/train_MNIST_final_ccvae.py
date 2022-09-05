@@ -21,9 +21,13 @@ import yaml
 import h5py
 from copy import deepcopy
 import ambiguous.models.cvae
-from ambiguous.models.cvae import Conv_CVAE, VAE, Readout
+from ambiguous.models.cvae import Conv_CVAE
+from ambiguous.models.vae import MLPVAE
+from ambiguous.models.readout import Readout
 from ambiguous.dataset.dataset import partition_dataset
 import argparse
+
+BATCH_SIZE_AMNIST = 2000
 
 
 def main():
@@ -37,6 +41,7 @@ def main():
     parser.add_argument('--n_cls', type=int, default=10)
     parser.add_argument('--lr', type=float, default=1e-3)
     parser.add_argument('--seed', type=int, default=42)
+    parser.add_argument('--device', type=str, default='cuda')
     parser.add_argument('--train_path', type=str, default='')
     parser.add_argument('--valid_path', type=str, default='')
     parser.add_argument('--test_path', type=str, default='')
@@ -45,8 +50,9 @@ def main():
     parser.add_argument('--test_size', type=int, default=10000)
     parser.add_argument('--n_iterations', type=int, default=2000)
     parser.add_argument('--save_freq', type=int, default=20)
-    parser.add_argument('--mix_high', type=float, default=0.3)
-    parser.add_argument('--mix_low', type=float, default=0.7)
+    parser.add_argument('--mix_low', type=float, default=0.3)
+    parser.add_argument('--mix_high', type=float, default=0.7)
+    parser.add_argument('--threshold', type=float, default=0.35)
     parser.add_argument('--version', type=str, default='V1')
     parser.add_argument('--data_path', type=str, default='')
     parser.add_argument('--path', type=str, default='')
@@ -103,9 +109,9 @@ def main():
     train_set, val_set = torch.utils.data.random_split(dataset, [round(0.8*len(dataset)), round(0.2*len(dataset))])
     test_set = datasets.MNIST(root=root, download=True, train=False, transform=transform)
     # Dataloaders
-    train_loader = DataLoader(train_set, batch_size=batch_size, num_workers=2, shuffle=True)
-    val_loader = DataLoader(val_set, batch_size=batch_size, num_workers=2)
-    test_loader = DataLoader(test_set, batch_size=batch_size, num_workers=2)
+    train_loader = DataLoader(train_set, batch_size=batch_size,shuffle=True)
+    val_loader = DataLoader(val_set, batch_size=batch_size)
+    test_loader = DataLoader(test_set, batch_size=batch_size)
 
     onehot = torch.zeros(n_cls, n_cls).to(device)
     onehot = onehot.scatter_(1, torch.LongTensor(range(n_cls)).view(n_cls,1).to(device), 1).view(n_cls, n_cls, 1, 1)
@@ -154,28 +160,33 @@ def main():
                     # wandb.log(loss_dict)
             torch.save(model.state_dict(), model_path)
             print(f"Epoch: {i+1} \t Train Loss: {running_loss:.2f} \t Val Loss: {val_loss:.2f}")
+
+        images, labels = next(iter(val_loader))
+        with torch.no_grad():
+            images = images.to(device)
+            labels = labels.to(device)
+            labels_fill_ = fill[labels]
+            y_ = (torch.rand(images.size(0), 1) * n_cls).type(torch.LongTensor).squeeze()
+            y_label_ = onehot[y_]
+            rec, mu, logvar = model((images, labels_fill_, y_label_))
+        torchvision.utils.save_image(rec, model_path+"/reconstructions.png")
         
     else:
         ckpt = torch.load(model_path)
         model = Conv_CVAE(latent_dim = latent_dim,n_cls=n_cls).to(device)
         model.load_state_dict(ckpt)
+        print("Loaded ccvae checkpoint.")
         
     model.eval()
-    images, labels = next(iter(val_loader))
-    with torch.no_grad():
-        images = images.to(device)
-        labels = labels.to(device)
-        labels_fill_ = fill[labels]
-        y_ = (torch.rand(images.size(0), 1) * n_cls).type(torch.LongTensor).squeeze()
-        y_label_ = onehot[y_]
-        rec, mu, logvar = model((images, labels_fill_, y_label_))
-    torchvision.utils.save_image(rec, model_path+"/reconstructions.png")
+
 
     if generate_amnist:
         vae = MLPVAE(latent_dim=vae_latent_dim, input_img_size=img_size).to(device)
         vae.load_state_dict(torch.load(vae_path))
         readout = Readout(latent_dim=vae_latent_dim, h=readout_h_dim, n_classes=n_cls).to(device)
         readout.load_state_dict(torch.load(readout_path))
+        vae.eval(); readout.eval()
+        print("Loaded vae and readout checkpoints.")
 
         onehot = torch.zeros(n_cls, n_cls).to(device)
         onehot = onehot.scatter_(1, torch.LongTensor(range(n_cls)).view(n_cls,1).to(device), 1).view(n_cls, n_cls, 1, 1)
@@ -196,11 +207,12 @@ def main():
             sizes['test'] = test_size
             dpaths['test'] = test_path
         for dset in sizes:
+            print(dset)
             for i in tqdm(range(n_iterations)):
-                z = torch.rand(sizes[dset], latent_dim).to(device)
-                y_ = (torch.rand(sizes[dset], 1) * n_cls).type(torch.LongTensor).squeeze().to(device)
+                z = torch.rand(BATCH_SIZE_AMNIST, latent_dim).to(device)
+                y_ = (torch.rand(BATCH_SIZE_AMNIST, 1) * n_cls).type(torch.LongTensor).squeeze().to(device)
                 y1_label_ = onehot[y_]
-                y2_ = (torch.rand(sizes[dset], 1) * n_cls).type(torch.LongTensor).squeeze().to(device)
+                y2_ = (torch.rand(BATCH_SIZE_AMNIST, 1) * n_cls).type(torch.LongTensor).squeeze().to(device)
                 y2_label_ = onehot[y2_]
 
                 w1 = torch.FloatTensor(1).uniform_(mix_low, mix_high).to(device)
@@ -208,7 +220,7 @@ def main():
 
                 y_label_ = (w1*y1_label_ + w2*y2_label_)/2 # use range of 0.3 to 0.7 for mixing
                 rec = model.decode((z, y_label_))
-                _, _, mu, _ = vae(rec)
+                _, mu, _, _ = vae(rec)
                 pred = torch.softmax(readout(mu),dim=1)
                 top2_idx = pred.topk(2)[0][:, 1]>threshold # use > 0.3
                 amb = rec[top2_idx]
@@ -234,7 +246,8 @@ def main():
                 if (i+1) % save_freq == 0:
                     print(count)
                 if count >= sizes[dset]:
-                    c=0
+                    print("Reached dataset size")
+                    count=0
                     break
         torchvision.utils.save_image(amb, "good_ambig.pdf")
 
