@@ -26,9 +26,12 @@ from ambiguous.models.vae import MLPVAE
 from ambiguous.models.readout import Readout
 from ambiguous.dataset.dataset import partition_dataset
 import argparse
+import glob
+import mlflow
+from mlflow import log_metrics, log_metric, log_artifact, log_artifacts, log_params
 
-BATCH_SIZE_AMNIST = 2000
-
+BATCH_SIZE_AMNIST = 512
+T_CLEAN = 0.6 # clean image threshold, ie. model > 75% confident in top-1 prediction
 
 def main():
     parser = argparse.ArgumentParser()
@@ -53,6 +56,7 @@ def main():
     parser.add_argument('--mix_low', type=float, default=0.3)
     parser.add_argument('--mix_high', type=float, default=0.7)
     parser.add_argument('--threshold', type=float, default=0.35)
+    parser.add_argument('--temperature', type=float, default=1.)
     parser.add_argument('--version', type=str, default='V1')
     parser.add_argument('--data_path', type=str, default='')
     parser.add_argument('--path', type=str, default='')
@@ -71,6 +75,7 @@ def main():
     threshold = args.threshold # 0.35
     mix_low = args.mix_low # 0.3
     mix_high = args.mix_high #  0.7
+    temperature = args.temperature
     n_iterations = args.n_iterations # 2000
     make_train = args.make_train
     make_valid = args.make_valid 
@@ -97,27 +102,97 @@ def main():
     latent_dim = args.latent_dim # 10
     device = args.device # torch.device("cuda" if torch.cuda.is_available() else "cpu")
     seed = args.seed
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    print(device)
-    root=data_path
+
+    try:
+        mlflow.create_experiment('ccvae')
+    except Exception as e:
+        print(e)
+    experiment = mlflow.set_experiment('ccvae')
+    run_id = torch.randint(0, 1000, (1,)).item()
+    mlflow.start_run(experiment_id=experiment.experiment_id, run_name=f'run_{run_id}')
+    print(vars(args))
+    log_params(vars(args))
+
+    # np.random.seed(seed)
+    # torch.manual_seed(seed)
 
     transform = transforms.Compose([
         transforms.ToTensor()
     ])
-    dataset = datasets.MNIST(root=root, download=True, train=True, transform=transform)
+    dataset = datasets.MNIST(root=data_path, download=True, train=True, transform=transform)
     train_set, val_set = torch.utils.data.random_split(dataset, [round(0.8*len(dataset)), round(0.2*len(dataset))])
-    test_set = datasets.MNIST(root=root, download=True, train=False, transform=transform)
+    test_set = datasets.MNIST(root=data_path, download=True, train=False, transform=transform)
+    print("Loaded MNIST")
     # Dataloaders
     train_loader = DataLoader(train_set, batch_size=batch_size,shuffle=True)
     val_loader = DataLoader(val_set, batch_size=batch_size)
     test_loader = DataLoader(test_set, batch_size=batch_size)
 
-    onehot = torch.zeros(n_cls, n_cls).to(device)
-    onehot = onehot.scatter_(1, torch.LongTensor(range(n_cls)).view(n_cls,1).to(device), 1).view(n_cls, n_cls, 1, 1)
     fill = torch.zeros([n_cls, n_cls, img_size, img_size]).to(device)
     for i in range(n_cls):
         fill[i, i, :, :] = 1
+    onehot = torch.zeros(n_cls, n_cls).to(device)
+    onehot = onehot.scatter_(1, torch.LongTensor(range(n_cls)).view(n_cls,1).to(device), 1).view(n_cls, n_cls, 1, 1)
+
+    def reconstruct(ccvae, images, labels, device=device):
+        y_ = (torch.rand(images.size(0), 1) * n_cls).type(torch.LongTensor).squeeze().to(device)
+        y = onehot[y_]
+        labels_fill_ = fill[labels]
+        rec_x, _, _ = ccvae((images, labels_fill_, y))
+        return rec_x, labels_fill_, y
+
+    def reconstruct_amb(model, images1, y1_label_, y2_label_, label_fill1, label_fill2):
+        y_label_ = 0.5*y1_label_ + 0.5*y2_label_
+        label_fill = 0.5*label_fill1 + 0.5*label_fill2
+        amb, _, _ = model((images1, label_fill, y_label_))
+        return amb
+
+    def get_mu(vae, clean_1, amb, clean_2):
+        _, mu_clean_1, _, _ = vae(clean_1)
+        _, mu_clean_2, _, _ = vae(clean_2)
+        _, mu, _, _ = vae(amb)
+        return mu_clean_1, mu, mu_clean_2
+
+    def get_good_idxs(readout, mu_clean_1, mu, mu_clean_2, y1_label_):
+        pred = torch.softmax(readout(mu)/temperature,dim=1)
+        pred_clean1 = torch.softmax(readout(mu_clean_1), dim=1)
+        pred_clean2 = torch.softmax(readout(mu_clean_2), dim=1)
+        max_clean1 = pred_clean1.argmax(1)
+        max_clean2 = pred_clean2.argmax(1)
+        top2_softprobs_amb = pred.topk(2)[0][:, 1]
+        top2_label_amb = pred.topk(2)[1][:, 1]
+        bistable = torch.logical_or(pred.argmax(1)==max_clean1, pred.argmax(1)==max_clean2)
+        bistable2 = torch.logical_or(top2_label_amb==max_clean1, top2_label_amb==max_clean2)
+        good_idxs = torch.logical_and(max_clean1==y1_label_.squeeze().argmax(1), max_clean1!=max_clean2)
+        good_idxs = torch.logical_and(good_idxs, top2_softprobs_amb > threshold)
+        good_idxs = torch.logical_and(good_idxs, bistable)
+        good_idxs = torch.logical_and(good_idxs, bistable2)
+        return good_idxs, max_clean1, max_clean2, pred_clean1, pred_clean2, top2_softprobs_amb
+
+    def make_example(img_c1, img_amb, img_c2, label1, label2, img_size=img_size):
+        np1 = (255*img_c1).cpu().detach().numpy().astype(np.uint8)
+        np_amb = (255*img_amb).cpu().detach().numpy().astype(np.uint8)
+        np2 = (255*img_c2).cpu().detach().numpy().astype(np.uint8)
+        np_img = np.zeros((1, img_size, img_size*3)).astype(np.uint8)
+        np_img[:, :, :img_size] = np1
+        np_img[:, :, img_size:2*img_size] = np_amb
+        np_img[:, :, 2*img_size:3*img_size] = np2
+        np_label = torch.tensor([label1.item(), label2.item()]).cpu().detach().numpy().astype(np.uint8)
+        return np_img, np_label
+
+    def save_images(clean_1, amb, clean_2, labels1, labels2, top2_softprobs_amb):
+        for j, (img_c1, img_amb, img_c2, label1, label2, top2_softprob) in enumerate(zip(clean_1, amb, clean_2, labels1, labels2, top2_softprobs_amb)):
+            np_img, np_label = make_example(img_c1, img_amb, img_c2, label1, label2)
+            top2_softprob = top2_softprob.cpu().detach().numpy()
+            clean1_softprob = pred_clean1[good_idxs][j]
+            clean2_softprob = pred_clean2[good_idxs][j]
+            
+            if (i+1) % save_freq == 0:
+                print(np_label)
+            np.save(f'{dpaths[dset]}/{j+count}_image.npy', np_img)
+            np.save(f'{dpaths[dset]}/{j+count}_label.npy', np_label)
+        return np_img, np_label,top2_softprob, clean1_softprob, clean2_softprob
+
     if train_cvae:
         model = Conv_CVAE(
         latent_dim = latent_dim,
@@ -131,7 +206,7 @@ def main():
         n_val = len(val_loader)
         for i in tqdm(range(num_epochs)):
             running_loss = 0
-            for idx, (images, labels) in tqdm(enumerate(train_loader)):
+            for batch_idx, (images, labels) in tqdm(enumerate(train_loader)):
                 images = images.to(device)
                 labels = labels.to(device)
                 labels_fill_ = fill[labels]
@@ -143,9 +218,10 @@ def main():
                 optimizer.zero_grad()
                 loss_dict['loss'].backward()
                 optimizer.step()
-                # wandb.log(loss_dict)
+                log_metrics(loss_dict, step=batch_idx)
+
             val_loss = 0
-            for _, (images, labels) in tqdm(enumerate(val_loader)):
+            for batch_idx, (images, labels) in tqdm(enumerate(val_loader)):
                 with torch.no_grad():
                     images = images.to(device)
                     labels = labels.to(device)
@@ -157,7 +233,7 @@ def main():
                     loss_dict = model.loss_function(rec, images, mu, logvar)
                     val_loss += loss_dict['loss'].item()/batch_size
                     loss_dict = {'loss_val':loss_dict['loss'], 'kld_val':loss_dict['kld'], 'rec_val':loss_dict['rec']}
-                    # wandb.log(loss_dict)
+                    log_metrics(loss_dict, step=batch_idx)
             torch.save(model.state_dict(), model_path)
             print(f"Epoch: {i+1} \t Train Loss: {running_loss:.2f} \t Val Loss: {val_loss:.2f}")
 
@@ -194,7 +270,6 @@ def main():
         os.makedirs(train_path, exist_ok=True)
         os.makedirs(valid_path, exist_ok=True)
         os.makedirs(test_path, exist_ok=True)
-        count=0
         sizes = {}
         dpaths = {}
         if make_train:
@@ -208,49 +283,39 @@ def main():
             dpaths['test'] = test_path
         for dset in sizes:
             print(dset)
-            for i in tqdm(range(n_iterations)):
-                z = torch.rand(BATCH_SIZE_AMNIST, latent_dim).to(device)
-                y_ = (torch.rand(BATCH_SIZE_AMNIST, 1) * n_cls).type(torch.LongTensor).squeeze().to(device)
-                y1_label_ = onehot[y_]
-                y2_ = (torch.rand(BATCH_SIZE_AMNIST, 1) * n_cls).type(torch.LongTensor).squeeze().to(device)
-                y2_label_ = onehot[y2_]
+            count=0
+            i=0
+            train_loader1 = DataLoader(train_set, batch_size=BATCH_SIZE_AMNIST,shuffle=True)
+            train_loader2 = DataLoader(train_set, batch_size=BATCH_SIZE_AMNIST,shuffle=True)
 
-                w1 = torch.FloatTensor(1).uniform_(mix_low, mix_high).to(device)
-                w2 = 1 - w1
+            while count < sizes[dset]:
+                i+=1
+                for idx, ((images1, t1), (images2, t2)) in enumerate(zip(train_loader1, train_loader2)):
+                    images1,t1,images2,t2 = images1.to(device),t1.to(device),images2.to(device),t2.to(device)
+                    clean_1, label_fill1, y1_label_, = reconstruct(model, images1, t1)
+                    clean_2, label_fill2, y2_label_ = reconstruct(model, images2, t2)
+                    amb = reconstruct_amb(model, images1, y1_label_, y2_label_, label_fill1, label_fill2)
+                    mu_clean_1, mu, mu_clean_2 = get_mu(vae, clean_1, amb, clean_2)
+                    good_idxs, max_clean1, max_clean2, pred_clean1, pred_clean2, top2_softprobs_amb = get_good_idxs(readout, mu_clean_1, mu, mu_clean_2, y1_label_)
+                    amb, clean_1, clean_2, labels1, labels2, top2_softprobs_amb = amb[good_idxs], clean_1[good_idxs], clean_2[good_idxs], max_clean1[good_idxs], max_clean2[good_idxs], top2_softprobs_amb[good_idxs]               
+                    if clean_1.size(0)>0:
+                        np_img, np_label, top2_softprob, clean1_softprob, clean2_softprob = save_images(clean_1, amb, clean_2, labels1, labels2, top2_softprobs_amb)
+                    count += clean_1.size(0)
+                    step = idx+i*len(train_loader)  
+                    log_metric('count', count, step=step)
+                    if step % save_freq == 0 and clean_1.size(0) > 0:
+                        print(f"iter: {step}, count: {count}")
+                        fig=plt.figure()
+                        plt.imshow(np_img.transpose(1,2,0)/255.)
+                        plt.title((np_label,round(top2_softprob.max().item(),3), round(clean1_softprob.max().item(),3), round(clean2_softprob.max().item(),3)),fontsize=15)
+                        fig_path = f'{dpaths[dset]}/{count}.png'
+                        fig.savefig(fig_path)
+                        log_artifact(fig_path)
 
-                y_label_ = (w1*y1_label_ + w2*y2_label_)/2 # use range of 0.3 to 0.7 for mixing
-                rec = model.decode((z, y_label_))
-                _, mu, _, _ = vae(rec)
-                pred = torch.softmax(readout(mu),dim=1)
-                top2_idx = pred.topk(2)[0][:, 1]>threshold # use > 0.3
-                amb = rec[top2_idx]
-                clean_1 = model.decode((z[top2_idx], y1_label_[top2_idx]))
-                clean_2 = model.decode((z[top2_idx], y2_label_[top2_idx]))
-                labels = y_label_[top2_idx]
+            print("Reached dataset size")
+            # torchvision.utils.save_image(torch.from_numpy(np_img), "good_ambig.png")
 
-                h=28
-                for j, (img_c1, img_amb, img_c2, label) in enumerate(zip(clean_1, amb, clean_2, labels)):
-                    np1 = (255*img_c1).cpu().detach().numpy().astype(np.uint8)
-                    np_amb = (255*img_amb).cpu().detach().numpy().astype(np.uint8)
-                    np2 = (255*img_c2).cpu().detach().numpy().astype(np.uint8)
-                    np_img = np.zeros((1, h, h*3)).astype(np.uint8)
-                    np_img[:, :, :h] = np1
-                    np_img[:, :, h:2*h] = np_amb
-                    np_img[:, :, 2*h:3*h] = np2
-                    np_label = label.cpu().detach().numpy().astype(np.uint8)
-
-                    np.save(f'{dpaths[dset]}/{j+count}_image.npy', np_img)
-                    np.save(f'{dpaths[dset]}/{j+count}_label.npy', np_label)
-                
-                count += clean_1.size(0)
-                if (i+1) % save_freq == 0:
-                    print(count)
-                if count >= sizes[dset]:
-                    print("Reached dataset size")
-                    count=0
-                    break
-        torchvision.utils.save_image(amb, "good_ambig.pdf")
-
+    mlflow.end_run()
 
 
 if __name__ == '__main__':

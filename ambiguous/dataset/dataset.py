@@ -76,6 +76,38 @@ class DatasetFromNPY(Dataset):
     def __len__(self):
         return self.data_len
 
+class DatasetTriplet(Dataset):
+    def __init__(self, root, download=False, train=True, transform=None):
+        """
+        A dataset example where the class is embedded in the file names
+        This data example also does not use any torch transforms
+        Args:
+            folder_path (string): path to image folder
+        """
+        if train:
+            self.image_list = glob.glob(root+'/train/*image.npy')
+            self.label_list = glob.glob(root+'/train/*label.npy')
+        else:
+            self.image_list = glob.glob(root+'/test/*image.npy')
+            self.label_list = glob.glob(root+'/test/*label.npy')
+        # Calculate len
+        self.data_len = len(self.image_list)
+        self.transform = transform
+
+    def __getitem__(self, index, img_size=28):
+        single_image_path = self.image_list[index]
+        im_as_np = np.load(single_image_path).astype(np.float64)/255.
+        im_as_ten = torch.from_numpy(im_as_np)
+        clean1 = im_as_ten[:, :, :img_size]
+        amb = im_as_ten[:, :, img_size:2*img_size]
+        clean2 = im_as_ten[:, :, 2*img_size:3*img_size] 
+        label = torch.from_numpy(np.load(self.label_list[index]))
+        return (clean1, amb, clean2), label
+
+    def __len__(self):
+        return self.data_len
+
+
 
 def save_dataset_to_file(dataset_name, og_root, new_root, blend, pairs=None, batch_size=100, n_train=60000, n_test=10000):
     os.makedirs(new_root+'/train/')
