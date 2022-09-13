@@ -1,6 +1,7 @@
 from distutils.archive_util import make_tarball
 import os
 import importlib
+from pickle import TRUE
 import numpy as np
 import matplotlib.pyplot as plt
 import time
@@ -45,6 +46,7 @@ def main():
     parser.add_argument('--lr', type=float, default=1e-3)
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--device', type=str, default='cuda')
+    parser.add_argument('--dataset', type=str, default='mnist')
     parser.add_argument('--train_path', type=str, default='')
     parser.add_argument('--valid_path', type=str, default='')
     parser.add_argument('--test_path', type=str, default='')
@@ -88,6 +90,7 @@ def main():
     valid_path = args.valid_path 
     test_path = args.test_path
     data_path = args.data_path
+    dataset = args.dataset
     model_path = args.path
     train_cvae = args.train_cvae
     recon_path = args.recon_path
@@ -118,13 +121,26 @@ def main():
     # np.random.seed(seed)
     # torch.manual_seed(seed)
 
-    transform = transforms.Compose([
-        transforms.ToTensor()
-    ])
-    dataset = datasets.MNIST(root=data_path, download=True, train=True, transform=transform)
-    train_set, val_set = torch.utils.data.random_split(dataset, [round(0.8*len(dataset)), round(0.2*len(dataset))])
-    test_set = datasets.MNIST(root=data_path, download=True, train=False, transform=transform)
-    print("Loaded MNIST")
+    if dataset == 'mnist':
+        transform = transforms.Compose([
+            transforms.ToTensor()
+        ])
+        dataset = datasets.MNIST(root=data_path, download=True, train=True, transform=transform)
+        train_set, val_set = torch.utils.data.random_split(dataset, [round(0.8*len(dataset)), round(0.2*len(dataset))])
+        test_set = datasets.MNIST(root=data_path, download=True, train=False, transform=transform)
+        print("Loaded MNIST")
+    elif dataset == 'emnist':
+        transform = transforms.Compose([
+            transforms.ToTensor(),
+            lambda x: x.rot90(1,[2,1]).flip(2)
+        ])
+        dataset = datasets.EMNIST(root=data_path, download=True, split='byclass', train=True, transform=transform)
+        new_dataset = partition_dataset(dataset, range(10, 36))
+        train_set, val_set = torch.utils.data.random_split(new_dataset, [round(0.8*len(new_dataset)), round(0.2*len(new_dataset))])
+        test_set = datasets.EMNIST(root=data_path, download=True, split='byclass', train=False, transform=transform)
+
+    else:
+        print("dataset not supported")
     # Dataloaders
     train_loader = DataLoader(train_set, batch_size=batch_size,shuffle=True)
     val_loader = DataLoader(val_set, batch_size=batch_size)

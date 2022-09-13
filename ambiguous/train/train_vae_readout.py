@@ -125,7 +125,7 @@ def main():
     test_size = args.test_size
     readout_h_dim = args.readout_h_dim
     device = args.device # torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    root = args.data_path
+    data_path = args.data_path
     seed = args.seed
     np.random.seed(seed)
     torch.manual_seed(seed)
@@ -146,17 +146,26 @@ def main():
     ccvae.load_state_dict(ckpt); ccvae.eval()
     print("Loaded ccvae checkpoint.")
 
-    transform = transforms.Compose([
-        transforms.ToTensor()
-    ])
-    # dataset = RecDataset(ccvae, train_size, n_cls, latent_dim)
-    # train_set, val_set = torch.utils.data.random_split(dataset, [round(0.8*len(dataset)), round(0.2*len(dataset))])
-    # test_set = RecDataset(ccvae, test_size, n_cls, latent_dim)
-    # print("instantiated custom dataset")
-    dataset = datasets.MNIST(root=root, download=True, train=True, transform=transform)
-    train_set, val_set = torch.utils.data.random_split(dataset, [round(0.8*len(dataset)), round(0.2*len(dataset))])
-    test_set = datasets.MNIST(root=root, download=True, train=False, transform=transform)
-    print("Loaded MNIST")
+    if dataset == 'mnist':
+        transform = transforms.Compose([
+            transforms.ToTensor()
+        ])
+        dataset = datasets.MNIST(root=data_path, download=True, train=True, transform=transform)
+        train_set, val_set = torch.utils.data.random_split(dataset, [round(0.8*len(dataset)), round(0.2*len(dataset))])
+        test_set = datasets.MNIST(root=data_path, download=True, train=False, transform=transform)
+        print("Loaded MNIST")
+    elif dataset == 'emnist':
+        transform = transforms.Compose([
+            transforms.ToTensor(),
+            lambda x: x.rot90(1,[2,1]).flip(2)
+        ])
+        dataset = datasets.EMNIST(root=data_path, download=False, split='byclass', train=True, transform=transform)
+        new_dataset = partition_dataset(dataset, range(10, 36))
+        train_set, val_set = torch.utils.data.random_split(new_dataset, [round(0.8*len(new_dataset)), round(0.2*len(new_dataset))])
+        test_set = datasets.EMNIST(root=data_path, download=False, split='byclass', train=False, transform=transform)
+
+    else:
+        print("dataset not supported")
     # Dataloaders
     train_loader = DataLoader(train_set, batch_size=batch_size,shuffle=True)
     val_loader = DataLoader(val_set, batch_size=batch_size)
