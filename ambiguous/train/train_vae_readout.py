@@ -169,7 +169,7 @@ def main():
     onehot = onehot.scatter_(1, torch.LongTensor(range(n_cls)).view(n_cls,1).to(device), 1).view(n_cls, n_cls, 1, 1)
 
     def reconstruct(ccvae, images, labels, device=device):
-        y_ = (torch.rand(images.size(0), 1) * n_cls).type(torch.LongTensor).squeeze().to(device)
+        y_ = labels # (torch.rand(images.size(0), 1) * n_cls).type(torch.LongTensor).squeeze().to(device)
         y = onehot[y_]
         labels_fill_ = fill[labels]
         rec_x, _, _ = ccvae((images, labels_fill_, y))
@@ -199,7 +199,7 @@ def main():
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
-                log_metric("train/loss", loss.item()/batch_size, step=batch_idx)
+                log_metric("train/loss", loss.item()/batch_size)
                 
             val_loss = 0
             for batch_idx, (images, labels) in enumerate(val_loader):
@@ -209,10 +209,11 @@ def main():
                     rec, mu, logvar, _ = model(rec_x)                    
                     loss = loss_function(rec, images, mu, logvar, criterion)
                     val_loss += loss/batch_size
-                    log_metric("valid/loss", loss.item()/batch_size, step=batch_idx)
+                    log_metric("valid/loss", loss.item()/batch_size)
 
             print(f"Epoch: {i+1} \t Train Loss: {running_loss/n_train:.2f} \t Val Loss: {val_loss/n_val:.2f}")
-
+            log_metric('train/epoch_loss', running_loss.item()/n_train, step=i)
+            log_metric('val/epoch_loss', val_loss.item()/n_val, step=i)
             torch.save(model.state_dict(), vae_path)
     else:
         model = MLPVAE(latent_dim = latent_dim, input_img_size=img_size).to(device)

@@ -62,6 +62,7 @@ def main():
     parser.add_argument('--path', type=str, default='')
     parser.add_argument('--vae_path', type=str, default='')
     parser.add_argument('--readout_path', type=str, default='')
+    parser.add_argument('--recon_path', type=str, default='')
     parser.add_argument('--train_cvae', default=False, action='store_true')
     parser.add_argument('--generate_amnist', default=False, action='store_true')
     parser.add_argument('--make_train', default=False, action='store_true')
@@ -89,6 +90,7 @@ def main():
     data_path = args.data_path
     model_path = args.path
     train_cvae = args.train_cvae
+    recon_path = args.recon_path
     vae_path = args.vae_path
     readout_path = args.readout_path
     generate_amnist = args.generate_amnist
@@ -100,7 +102,7 @@ def main():
     readout_h_dim = args.readout_h_dim
     num_epochs=args.num_epochs # 25
     latent_dim = args.latent_dim # 10
-    device = args.device # torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = args.device
     seed = args.seed
 
     try:
@@ -135,7 +137,7 @@ def main():
     onehot = onehot.scatter_(1, torch.LongTensor(range(n_cls)).view(n_cls,1).to(device), 1).view(n_cls, n_cls, 1, 1)
 
     def reconstruct(ccvae, images, labels, device=device):
-        y_ = (torch.rand(images.size(0), 1) * n_cls).type(torch.LongTensor).squeeze().to(device)
+        y_ = labels # (torch.rand(images.size(0), 1) * n_cls).type(torch.LongTensor).squeeze().to(device)
         y = onehot[y_]
         labels_fill_ = fill[labels]
         rec_x, _, _ = ccvae((images, labels_fill_, y))
@@ -210,7 +212,7 @@ def main():
                 images = images.to(device)
                 labels = labels.to(device)
                 labels_fill_ = fill[labels]
-                y_ = (torch.rand(images.size(0), 1) * n_cls).type(torch.LongTensor).squeeze().to(device)
+                y_ = labels # (torch.rand(images.size(0), 1) * n_cls).type(torch.LongTensor).squeeze().to(device)
                 y_label_ = onehot[y_]
                 rec, mu, logvar = model((images, labels_fill_, y_label_))
                 loss_dict = model.loss_function(rec, images, mu, logvar)
@@ -218,7 +220,7 @@ def main():
                 optimizer.zero_grad()
                 loss_dict['loss'].backward()
                 optimizer.step()
-                log_metrics(loss_dict, step=batch_idx)
+                log_metric('loss_batch/train',loss_dict['loss'].item()/batch_size)
 
             val_loss = 0
             for batch_idx, (images, labels) in tqdm(enumerate(val_loader)):
@@ -226,26 +228,27 @@ def main():
                     images = images.to(device)
                     labels = labels.to(device)
                     labels_fill_ = fill[labels]
-                    y_ = (torch.rand(images.size(0), 1) * n_cls).type(torch.LongTensor).squeeze()
+                    y_ = labels # (torch.rand(images.size(0), 1) * n_cls).type(torch.LongTensor).squeeze()
                     y_label_ = onehot[y_]
                     rec, mu, logvar = model((images, labels_fill_, y_label_))
                     torchvision.utils.save_image(rec, "reconstruction_valid.pdf")
                     loss_dict = model.loss_function(rec, images, mu, logvar)
                     val_loss += loss_dict['loss'].item()/batch_size
-                    loss_dict = {'loss_val':loss_dict['loss'], 'kld_val':loss_dict['kld'], 'rec_val':loss_dict['rec']}
-                    log_metrics(loss_dict, step=batch_idx)
+                    log_metric('loss_batch/val', loss_dict['loss'].item()/batch_size)
             torch.save(model.state_dict(), model_path)
             print(f"Epoch: {i+1} \t Train Loss: {running_loss:.2f} \t Val Loss: {val_loss:.2f}")
+            log_metric('loss_epoch/train', running_loss/len(train_loader),step=i)
+            log_metric('loss_epoch/val', val_loss/len(val_loader), step=i)
 
         images, labels = next(iter(val_loader))
         with torch.no_grad():
             images = images.to(device)
             labels = labels.to(device)
             labels_fill_ = fill[labels]
-            y_ = (torch.rand(images.size(0), 1) * n_cls).type(torch.LongTensor).squeeze()
+            y_ = labels # (torch.rand(images.size(0), 1) * n_cls).type(torch.LongTensor).squeeze()
             y_label_ = onehot[y_]
             rec, mu, logvar = model((images, labels_fill_, y_label_))
-        torchvision.utils.save_image(rec, model_path+"/reconstructions.png")
+        torchvision.utils.save_image(rec, recon_path)
         
     else:
         ckpt = torch.load(model_path)

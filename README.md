@@ -20,12 +20,12 @@ pip install -e .
 pip install -r requirements.txt
 ```
 ### download ambiguous datasets (A-MNIST and A-EMNIST)
-A-MNIST google drive link: https://drive.google.com/file/d/1YhaetgET00mPhXBzPCAtLQN6nrh9ByFX/view?usp=sharing 
+A-MNIST google drive link: https://drive.google.com/file/d/1_fGvSWnNJRUzrUNT_7kHzkNca6_Ahlqj/view?usp=sharing 
 
 A-EMNIST google drive link:
 
 ### download trained model weights for experiments
-google drive link: https://drive.google.com/file/d/1Vi9ikbXnsY2mJshFlJn9XCzsw-Kw57QI/view?usp=sharing 
+gdrive link: https://drive.google.com/file/d/1a49OW61ShyAVZQos6iSLmBZTrTybvOtf/view?usp=sharing
 
 unzip into a folder then:
 
