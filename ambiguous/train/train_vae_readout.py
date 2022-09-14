@@ -98,6 +98,7 @@ def main():
     parser.add_argument('--ccvae_path', type=str, default='')
     parser.add_argument('--vae_path', type=str, default='')
     parser.add_argument('--data_path', type=str, default='')
+    parser.add_argument('--dataset', type=str, default='')
     parser.add_argument('--latent_plot_path', type=str, default='')
     parser.add_argument('--recon_plot_path', type=str, default='')
     parser.add_argument('--readout_path', type=str, default='')
@@ -126,6 +127,7 @@ def main():
     readout_h_dim = args.readout_h_dim
     device = args.device # torch.device("cuda" if torch.cuda.is_available() else "cpu")
     data_path = args.data_path
+    dataset = args.dataset
     seed = args.seed
     np.random.seed(seed)
     torch.manual_seed(seed)
@@ -271,6 +273,27 @@ def main():
         readout.load_state_dict(torch.load(readout_path))
         criterion = nn.CrossEntropyLoss(reduction='sum')
         readout.eval()
+        val_loss, val_acc = 0,0
+        for _, (images, labels) in enumerate(val_loader):
+            images, labels = images.to(device), labels.to(device)
+            rec_x = reconstruct(ccvae, images, labels)
+            loss, pred = loss_readout_OG(readout, model, rec_x, labels, criterion)
+            val_loss += loss/batch_size
+            val_acc += (torch.argmax(pred,1)==labels).float().sum()
+        print(f"Epoch:{i+1} \t Val Loss:{val_loss:.3f} \t Val Acc:{val_acc:.3f}")
+        log_metric('val/epoch_loss', val_loss)
+        log_metric('val/accuracy', val_acc/(len(val_loader)*batch_size))
+        test_loss, test_acc = 0,0
+        for _, (images, labels) in enumerate(test_loader):
+            images, labels = images.to(device), labels.to(device)
+            rec_x = reconstruct(ccvae, images, labels)
+            loss, pred = loss_readout_OG(readout, model, rec_x, labels, criterion)
+            test_loss += loss/batch_size
+            test_acc += (torch.argmax(pred,1)==labels).float().sum()
+        print(f"Epoch:{i+1} \t Val Loss:{test_loss:.3f} \t Val Acc:{test_acc:.3f}")
+        log_metric('test/epoch_loss', test_loss)
+        log_metric('test/accuracy', test_acc/(len(test_loader)*batch_size))
+       
 
     mlflow.end_run()
 
