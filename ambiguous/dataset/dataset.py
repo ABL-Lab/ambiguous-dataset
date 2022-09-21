@@ -5,7 +5,6 @@ import torchvision
 from torch import nn, optim
 from datetime import datetime
 from ambiguous.data_utils import *
-from ambiguous.adversarial import *
 from ambiguous.models.ambiguous_generator import *
 import ambiguous.models.cvae
 from ambiguous.models.cvae import Encoder, Decoder, EMNIST_CVAE
@@ -85,11 +84,11 @@ class DatasetTriplet(Dataset):
             folder_path (string): path to image folder
         """
         if train:
-            self.image_list = glob.glob(root+'/train/*image.npy')
-            self.label_list = glob.glob(root+'/train/*label.npy')
+            self.image_list = sorted(glob.glob(root+'/train/*image.npy'))
+            self.label_list = sorted(glob.glob(root+'/train/*label.npy'))
         else:
-            self.image_list = glob.glob(root+'/test/*image.npy')
-            self.label_list = glob.glob(root+'/test/*label.npy')
+            self.image_list = sorted(glob.glob(root+'/test/*image.npy'))
+            self.label_list = sorted(glob.glob(root+'/test/*label.npy'))
         # Calculate len
         self.data_len = len(self.image_list)
         self.transform = transform
