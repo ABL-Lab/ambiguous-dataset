@@ -153,6 +153,19 @@ class CatConv(nn.Module):
         out2 = self.conv2(y)
         return torch.cat([out1, out2], 1)
 
+class Flatten(nn.Module):
+    def forward(self, x):
+        batch_size = x.shape[0]
+        return x.view(batch_size, -1)
+
+class View(nn.Module):
+    def __init__(self, shape):
+        super(View, self).__init__()
+        self.shape = shape
+
+    def forward(self, input):
+        return input.view(*self.shape)        
+
     
 class Conv_CVAE(nn.Module):
     def __init__(self,
@@ -343,7 +356,95 @@ class Conv_CVAE(nn.Module):
 
         return self.forward(x)[0]
 
+
+class ConvolutionalVAE(nn.Module):
+    def __init__(self, latent_dim=20, n_cls=10, img_size=28, in_ch=[1,32,64,128],conditional=False,
+                 kernel_size=3, stride=2, padding=1):
+        super(ConvolutionalVAE, self).__init__()
+        self.latent_dim = latent_dim
+        self.n_cls = n_cls
+        self.conditional = conditional
+        self.in_ch = in_ch
+        kernel_size = [kernel_size]*len(in_ch)
+        stride = [stride]*len(in_ch)
+        padding = [padding]*len(in_ch)
+        num_layers = len(in_ch)-1
+        modules = []
+        for i in range(num_layers):
+            if i == 0 and self.conditional:
+                conv0_1 = nn.Sequential(nn.Conv2d(in_ch[i], in_ch[i+1]//2, kernel_size[i], stride=stride[i], padding=padding[i]), nn.BatchNorm2d(in_ch[i+1]//2), nn.LeakyReLU())
+                conv0_2 = nn.Sequential(nn.Conv2d(n_cls, in_ch[i+1]//2, kernel_size[i], stride=stride[i], padding=padding[i]), nn.BatchNorm2d(in_ch[i+1]//2), nn.LeakyReLU())
+                conv = CatConv(conv0_1, conv0_2)
+            else:
+                conv = nn.Sequential(nn.Conv2d(in_ch[i], in_ch[i+1], kernel_size[i], stride=stride[i], padding=padding[i]), nn.BatchNorm2d(in_ch[i+1]), nn.LeakyReLU())
+            modules.append(conv)
+        modules.append(nn.Flatten())
+        self.encoder = nn.Sequential(*modules)
+
+        self.fc_mu = nn.Linear(128*4*4, latent_dim)
+        self.fc_logvar = nn.Linear(128*4*4, latent_dim)
+
+        self.fc_mu2 = nn.Sequential(
+                                    nn.Linear(latent_dim, in_ch[-1]*4*4), 
+                                    View(shape=(-1, in_ch[-1], 4, 4)), 
+                                    nn.LeakyReLU()
+                                )
+        modules = []
+        for i in range(num_layers):
+            last_pad = img_size//(2**i) % 2
+            scale_factor = img_size//(2**i) / (img_size//(2**(i+1)) + last_pad)
+            act_fn = nn.Tanh() if i == num_layers - 1 else nn.LeakyReLU()
+            if i == 0 and self.conditional:
+                upconv0 = nn.Sequential( 
+                                        nn.Upsample(scale_factor=scale_factor, mode='bilinear') , 
+                                        nn.Conv2d(in_ch[-1], in_ch[-2-i]//2, kernel_size=(1, 1), stride=1, padding=0), 
+                                        nn.BatchNorm2d(in_ch[-2-i]//2), 
+                                        act_fn
+                                    )
+                upconv1 = nn.Sequential( 
+                                        nn.Upsample(scale_factor=scale_factor, mode='bilinear') , 
+                                        nn.Conv2d(n_cls, in_ch[-2-i]//2, kernel_size=(1, 1), stride=1, padding=0), 
+                                        nn.BatchNorm2d(in_ch[-2-i]//2), 
+                                        act_fn
+                                    )
+                upconv = CatConv(upconv0, upconv1)
+            else:
+                upconv = nn.Sequential( 
+                                        nn.Upsample(scale_factor=scale_factor, mode='bilinear') , 
+                                        nn.Conv2d(in_ch[-1-i], in_ch[-2-i], kernel_size=(1, 1), stride=1, padding=0), 
+                                        nn.BatchNorm2d(in_ch[-2-i]), 
+                                        act_fn
+                                    )
+            modules.append(upconv)
+        self.decoder = nn.Sequential(*modules)
+
+    def reparamaterize(self, mu, logvar):
+        std = torch.exp(0.5 * logvar)
+        eps = torch.randn_like(std)
+        return eps * std + mu
     
+    def forward(self, input):
+        x, y_enc, y_dec = input
+        if self.conditional:
+            h = self.encoder((x, y_enc))
+        else:
+            h = self.encoder(x)
+        mu, logvar = self.fc_mu(h), self.fc_logvar(h)
+        z = self.reparamaterize(mu, logvar)
+        z = self.fc_mu2(z)
+        if self.conditional:
+            rec = self.decoder((z, y_dec))
+        else:
+            rec = self.decoder(z)
+        return rec, x, mu, logvar
+
+    def loss_function(self,rec,x,mu,logvar):
+        kld_loss = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+        rec_loss = F.mse_loss(rec, x, reduction='sum')
+        loss = rec_loss + kld_loss
+        return {'loss': loss, 'rec':rec_loss.detach(), 'kld':kld_loss.detach()}
+
+####################################
 class EMNIST_Encoder(nn.Module):
     def __init__(self, latent_dim, layer_sizes, n_classes, conditional=False):
         super(EMNIST_Encoder, self).__init__()
