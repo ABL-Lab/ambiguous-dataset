@@ -22,7 +22,7 @@ import yaml
 import h5py
 from copy import deepcopy
 import ambiguous.models.cvae
-from ambiguous.models.cvae import Conv_CVAE
+from ambiguous.models.cvae import ConvolutionalVAE
 from ambiguous.models.vae import MLPVAE
 from ambiguous.models.readout import Readout
 from ambiguous.dataset.dataset import partition_dataset
@@ -66,6 +66,7 @@ def main():
     parser.add_argument('--readout_path', type=str, default='')
     parser.add_argument('--recon_path', type=str, default='')
     parser.add_argument('--train_cvae', default=False, action='store_true')
+    parser.add_argument('--conditional', default=False, action='store_true')
     parser.add_argument('--generate_amnist', default=False, action='store_true')
     parser.add_argument('--make_train', default=False, action='store_true')
     parser.add_argument('--make_valid', default=False, action='store_true')
@@ -106,6 +107,7 @@ def main():
     num_epochs=args.num_epochs # 25
     latent_dim = args.latent_dim # 10
     device = args.device
+    conditional = args.conditional
     seed = args.seed
 
     try:
@@ -151,18 +153,20 @@ def main():
         fill[i, i, :, :] = 1
     onehot = torch.zeros(n_cls, n_cls).to(device)
     onehot = onehot.scatter_(1, torch.LongTensor(range(n_cls)).view(n_cls,1).to(device), 1).view(n_cls, n_cls, 1, 1)
+    if conditional:
+        onehot = nn.Upsample(scale_factor=4)(onehot)
 
     def reconstruct(ccvae, images, labels, device=device):
         y_ = labels # (torch.rand(images.size(0), 1) * n_cls).type(torch.LongTensor).squeeze().to(device)
         y = onehot[y_]
         labels_fill_ = fill[labels]
-        rec_x, _, _ = ccvae((images, labels_fill_, y))
+        rec_x, _, _, _ = ccvae((images, labels_fill_, y))
         return rec_x, labels_fill_, y
 
     def reconstruct_amb(model, images1, y1_label_, y2_label_, label_fill1, label_fill2):
         y_label_ = 0.5*y1_label_ + 0.5*y2_label_
         label_fill = 0.5*label_fill1 + 0.5*label_fill2
-        amb, _, _ = model((images1, label_fill, y_label_))
+        amb, _, _, _ = model((images1, label_fill, y_label_))
         return amb
 
     def get_mu(vae, clean_1, amb, clean_2):
@@ -179,9 +183,10 @@ def main():
         max_clean2 = pred_clean2.argmax(1)
         top2_softprobs_amb = pred.topk(2)[0][:, 1]
         top2_label_amb = pred.topk(2)[1][:, 1]
+        print(max_clean1.shape, y1_label_.squeeze().argmax(1)[:,0,0].shape, max_clean2.shape)
         bistable = torch.logical_or(pred.argmax(1)==max_clean1, pred.argmax(1)==max_clean2)
         bistable2 = torch.logical_or(top2_label_amb==max_clean1, top2_label_amb==max_clean2)
-        good_idxs = torch.logical_and(max_clean1==y1_label_.squeeze().argmax(1), max_clean1!=max_clean2)
+        good_idxs = torch.logical_and(max_clean1==y1_label_.squeeze().argmax(1)[:,0,0], max_clean1!=max_clean2)
         good_idxs = torch.logical_and(good_idxs, top2_softprobs_amb > threshold)
         good_idxs = torch.logical_and(good_idxs, bistable)
         good_idxs = torch.logical_and(good_idxs, bistable2)
@@ -212,7 +217,7 @@ def main():
         return np_img, np_label,top2_softprob, clean1_softprob, clean2_softprob
 
     if train_cvae:
-        model = Conv_CVAE(
+        model = ConvolutionalVAE(
         latent_dim = latent_dim,
             n_cls=n_cls
         ).to(device)
@@ -230,7 +235,7 @@ def main():
                 labels_fill_ = fill[labels]
                 y_ = labels # (torch.rand(images.size(0), 1) * n_cls).type(torch.LongTensor).squeeze().to(device)
                 y_label_ = onehot[y_]
-                rec, mu, logvar = model((images, labels_fill_, y_label_))
+                rec, x, mu, logvar = model((images, labels_fill_, y_label_))
                 loss_dict = model.loss_function(rec, images, mu, logvar)
                 running_loss += loss_dict['loss'].item()/batch_size
                 optimizer.zero_grad()
@@ -246,7 +251,7 @@ def main():
                     labels_fill_ = fill[labels]
                     y_ = labels # (torch.rand(images.size(0), 1) * n_cls).type(torch.LongTensor).squeeze()
                     y_label_ = onehot[y_]
-                    rec, mu, logvar = model((images, labels_fill_, y_label_))
+                    rec, x, mu, logvar = model((images, labels_fill_, y_label_))
                     torchvision.utils.save_image(rec, "reconstruction_valid.pdf")
                     loss_dict = model.loss_function(rec, images, mu, logvar)
                     val_loss += loss_dict['loss'].item()/batch_size
@@ -263,12 +268,12 @@ def main():
             labels_fill_ = fill[labels]
             y_ = labels # (torch.rand(images.size(0), 1) * n_cls).type(torch.LongTensor).squeeze()
             y_label_ = onehot[y_]
-            rec, mu, logvar = model((images, labels_fill_, y_label_))
+            rec, x, mu, logvar = model((images, labels_fill_, y_label_))
         torchvision.utils.save_image(rec, recon_path)
         
     else:
         ckpt = torch.load(model_path)
-        model = Conv_CVAE(latent_dim = latent_dim,n_cls=n_cls).to(device)
+        model = ConvolutionalVAE(latent_dim = latent_dim,n_cls=n_cls).to(device)
         model.load_state_dict(ckpt)
         print("Loaded ccvae checkpoint.")
         
@@ -283,8 +288,8 @@ def main():
         vae.eval(); readout.eval()
         print("Loaded vae and readout checkpoints.")
 
-        onehot = torch.zeros(n_cls, n_cls).to(device)
-        onehot = onehot.scatter_(1, torch.LongTensor(range(n_cls)).view(n_cls,1).to(device), 1).view(n_cls, n_cls, 1, 1)
+        # onehot = torch.zeros(n_cls, n_cls).to(device)
+        # onehot = onehot.scatter_(1, torch.LongTensor(range(n_cls)).view(n_cls,1).to(device), 1).view(n_cls, n_cls, 1, 1)
 
         os.makedirs(train_path, exist_ok=True)
         os.makedirs(valid_path, exist_ok=True)
