@@ -5,10 +5,7 @@ import torchvision
 from torch import nn, optim
 from datetime import datetime
 from ambiguous.data_utils import *
-<<<<<<< HEAD
 # from ambiguous.adversarial import *
-=======
->>>>>>> 2ac64bdb6510e472164371b265fe727993c059f7
 from ambiguous.models.ambiguous_generator import *
 import ambiguous.models.cvae
 from ambiguous.models.cvae import Encoder, Decoder, EMNIST_CVAE
