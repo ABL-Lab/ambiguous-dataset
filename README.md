@@ -68,7 +68,7 @@ testloader = DataLoader(testset, batch_size=64, shuffle=False)
 (clean1, amb, clean2), label = next(iter(amnist_loader))
 ```
 Here are some examples of the generated triplets (clean, ambiguous, clean):
-![plot](./ambiguous/train/triplet_amnist.pdf)
+![plot](./ambiguous/train/triplet_amnist.png)
 <!-- ![plot](./ambiguous/train/triplet_emnist.png) -->
 
 <!-- ## Saving a custom ambiguous dataset
