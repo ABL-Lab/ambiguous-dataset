@@ -254,7 +254,9 @@ def main():
                 readout_opt.step()
                 train_loss += loss/batch_size
                 train_acc += (torch.argmax(pred,1)==labels).float().sum()
-                
+            log_metric('loss_epoch/train', train_loss/len(train_loader).item())
+            log_metric('acc_epoch/train', train_acc.item()/len(train_loader)/batch_size)
+
             readout.eval()
             for _, (images, labels) in enumerate(val_loader):
                 images, labels = images.to(device), labels.to(device)
@@ -262,6 +264,8 @@ def main():
                 loss, pred = loss_readout_OG(readout, model, rec_x, labels, criterion)
                 val_loss += loss/batch_size
                 val_acc += (torch.argmax(pred,1)==labels).float().sum()
+            log_metric('loss_epoch/val', val_loss.item()/len(val_loader))
+            log_metric('acc_epoch/val', val_acc.item()/len(val_loader)/batch_size)
             
             val_acc /= (batch_size*len(val_loader))
             train_acc /= (batch_size*len(train_loader))

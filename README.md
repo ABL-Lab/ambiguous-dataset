@@ -20,7 +20,7 @@ pip install -e .
 pip install -r requirements.txt
 ```
 ### download ambiguous datasets (A-MNIST and A-EMNIST)
-A-MNIST google drive link: https://drive.google.com/file/d/1_fGvSWnNJRUzrUNT_7kHzkNca6_Ahlqj/view?usp=sharing 
+A-MNIST google drive link: https://drive.google.com/file/d/13-wSENzhsNUKsWOxho1HqwkD6RiNXmYg/view?usp=sharing
 
 A-EMNIST google drive link: https://drive.google.com/file/d/1rU1ZPzzthNQ1ogCL777OGobcPRlxmskz/view?usp=sharing 
 
@@ -68,8 +68,8 @@ testloader = DataLoader(testset, batch_size=64, shuffle=False)
 (clean1, amb, clean2), label = next(iter(amnist_loader))
 ```
 Here are some examples of the generated triplets (clean, ambiguous, clean):
-
-![plot](./ambiguous/train/triplet.png)
+![plot](./ambiguous/train/triplet_amnist.png)
+![plot](./ambiguous/train/triplet_emnist.png)
 
 <!-- ## Saving a custom ambiguous dataset
 ```python
