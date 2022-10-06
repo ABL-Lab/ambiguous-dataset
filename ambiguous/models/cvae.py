@@ -393,7 +393,7 @@ class ConvolutionalVAE(nn.Module):
         for i in range(num_layers):
             last_pad = img_size//(2**i) % 2
             scale_factor = img_size//(2**i) / (img_size//(2**(i+1)) + last_pad)
-            act_fn = nn.Tanh() if i == num_layers - 1 else nn.LeakyReLU()
+            act_fn = nn.Sigmoid() if i == num_layers - 1 else nn.LeakyReLU()
             if i == 0 and self.conditional:
                 upconv0 = nn.Sequential( 
                                         nn.Upsample(scale_factor=scale_factor, mode='bilinear') , 
@@ -424,10 +424,11 @@ class ConvolutionalVAE(nn.Module):
         return eps * std + mu
     
     def forward(self, input):
-        x, y_enc, y_dec = input
         if self.conditional:
+            x, y_enc, y_dec = input
             h = self.encoder((x, y_enc))
         else:
+            x = input
             h = self.encoder(x)
         mu, logvar = self.fc_mu(h), self.fc_logvar(h)
         z = self.reparamaterize(mu, logvar)

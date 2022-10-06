@@ -10,7 +10,7 @@ from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 import h5py
 from ambiguous.models.vae import MLPVAE
-from ambiguous.models.cvae import Conv_CVAE
+from ambiguous.models.cvae import Conv_CVAE, ConvolutionalVAE
 from ambiguous.models.readout import *
 from ambiguous.dataset.dataset import partition_dataset
 import argparse
@@ -37,7 +37,7 @@ def plot_reconstruction(plot_path, model, dataloader, device='cuda'):
 def latent_space_viz(plot_path, model, dataloader, N=1000, device='cuda'):
     batch = torch.cat([dataloader.dataset[x][0] for x in range(N)], 0)
     labels = torch.Tensor([dataloader.dataset[x][1] for x in range(N)])
-    _, mu, _, _  = model(batch.view(-1,1,model.img_size,model.img_size).to(device))
+    _, _,mu, _  = model(batch.view(-1,1,28,28).to(device))
     mu_2d = TSNE(2).fit_transform(mu.cpu().detach().numpy())
     fig=plt.figure()
     sns.set(rc={'figure.figsize':(10,8)})
@@ -103,6 +103,7 @@ def main():
     parser.add_argument('--recon_plot_path', type=str, default='')
     parser.add_argument('--readout_path', type=str, default='')
     parser.add_argument('--train_vae', default=False, action='store_true')
+    parser.add_argument('--conditional', default=False, action='store_true')
     parser.add_argument('--plot_vae', default=False, action='store_true')
     parser.add_argument('--train_readout', default=False, action='store_true')
 
@@ -144,7 +145,7 @@ def main():
 
 
     ckpt = torch.load(ccvae_path)
-    ccvae = Conv_CVAE(latent_dim = latent_dim,n_cls=n_cls).to(device)
+    ccvae = ConvolutionalVAE(latent_dim = latent_dim,n_cls=n_cls,conditional=True).to(device)
     ccvae.load_state_dict(ckpt); ccvae.eval()
     print("Loaded ccvae checkpoint.")
 
@@ -178,12 +179,13 @@ def main():
         fill[i, i, :, :] = 1
     onehot = torch.zeros(n_cls, n_cls).to(device)
     onehot = onehot.scatter_(1, torch.LongTensor(range(n_cls)).view(n_cls,1).to(device), 1).view(n_cls, n_cls, 1, 1)
+    onehot = nn.Upsample(scale_factor=4)(onehot)
 
     def reconstruct(ccvae, images, labels, device=device):
         y_ = labels # (torch.rand(images.size(0), 1) * n_cls).type(torch.LongTensor).squeeze().to(device)
         y = onehot[y_]
         labels_fill_ = fill[labels]
-        rec_x, _, _ = ccvae((images, labels_fill_, y))
+        rec_x, _, _, _ = ccvae((images, labels_fill_, y))
         return rec_x
 
     def loss_function(rec, x, mu, logvar, criterion):
@@ -192,7 +194,7 @@ def main():
         return KLD + rec_error
 
     if train_vae:
-        model = MLPVAE(latent_dim = latent_dim, input_img_size=img_size).to(device)
+        model = ConvolutionalVAE(latent_dim = latent_dim, conditional=False).to(device)
         print(model)
         optimizer = torch.optim.Adam(model.parameters(), lr=lr)
         criterion = nn.MSELoss(reduction='sum')
@@ -204,8 +206,8 @@ def main():
                 images, labels = images.to(device), labels.to(device)
                 # reconstruct from ccvae
                 rec_x = reconstruct(ccvae, images, labels)
-                rec, mu, logvar, _ = model(rec_x)
-                loss = loss_function(rec, images, mu, logvar, criterion) # or use rec_x for ground truth?
+                rec, x, mu, logvar = model(rec_x)
+                loss = loss_function(rec, rec_x, mu, logvar, criterion) # or use rec_x for ground truth?
                 running_loss += loss/batch_size
                 optimizer.zero_grad()
                 loss.backward()
@@ -217,8 +219,8 @@ def main():
                 with torch.no_grad():
                     images, labels = images.to(device), labels.to(device)
                     rec_x = reconstruct(ccvae, images, labels)
-                    rec, mu, logvar, _ = model(rec_x)                    
-                    loss = loss_function(rec, images, mu, logvar, criterion)
+                    rec, x, mu, logvar = model(rec_x)                    
+                    loss = loss_function(rec, rec_x, mu, logvar, criterion)
                     val_loss += loss/batch_size
                     log_metric("valid/loss", loss.item()/batch_size)
 
@@ -227,7 +229,7 @@ def main():
             log_metric('val/epoch_loss', val_loss.item()/n_val, step=i)
             torch.save(model.state_dict(), vae_path)
     else:
-        model = MLPVAE(latent_dim = latent_dim, input_img_size=img_size).to(device)
+        model = ConvolutionalVAE(latent_dim = latent_dim, conditional=False).to(device)
         model.load_state_dict(torch.load(vae_path))
         model.eval()
         print(model)

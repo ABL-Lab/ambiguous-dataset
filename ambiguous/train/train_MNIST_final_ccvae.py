@@ -164,15 +164,15 @@ def main():
         return rec_x, labels_fill_, y
 
     def reconstruct_amb(model, images1, y1_label_, y2_label_, label_fill1, label_fill2):
-        y_label_ = 0.5*y1_label_ + 0.5*y2_label_
-        label_fill = 0.5*label_fill1 + 0.5*label_fill2
+        y_label_ = y1_label_ + y2_label_
+        label_fill = label_fill1 + label_fill2
         amb, _, _, _ = model((images1, label_fill, y_label_))
         return amb
 
     def get_mu(vae, clean_1, amb, clean_2):
-        _, mu_clean_1, _, _ = vae(clean_1)
-        _, mu_clean_2, _, _ = vae(clean_2)
-        _, mu, _, _ = vae(amb)
+        _, _, mu_clean_1, _ = vae(clean_1)
+        _, _, mu_clean_2, _ = vae(clean_2)
+        _, _, mu, _ = vae(amb)
         return mu_clean_1, mu, mu_clean_2
 
     def get_good_idxs(readout, mu_clean_1, mu, mu_clean_2, y1_label_):
@@ -183,7 +183,6 @@ def main():
         max_clean2 = pred_clean2.argmax(1)
         top2_softprobs_amb = pred.topk(2)[0][:, 1]
         top2_label_amb = pred.topk(2)[1][:, 1]
-        print(max_clean1.shape, y1_label_.squeeze().argmax(1)[:,0,0].shape, max_clean2.shape)
         bistable = torch.logical_or(pred.argmax(1)==max_clean1, pred.argmax(1)==max_clean2)
         bistable2 = torch.logical_or(top2_label_amb==max_clean1, top2_label_amb==max_clean2)
         good_idxs = torch.logical_and(max_clean1==y1_label_.squeeze().argmax(1)[:,0,0], max_clean1!=max_clean2)
@@ -193,9 +192,20 @@ def main():
         return good_idxs, max_clean1, max_clean2, pred_clean1, pred_clean2, top2_softprobs_amb
 
     def make_example(img_c1, img_amb, img_c2, label1, label2, img_size=img_size):
-        np1 = (255*img_c1).cpu().detach().numpy().astype(np.uint8)
-        np_amb = (255*img_amb).cpu().detach().numpy().astype(np.uint8)
-        np2 = (255*img_c2).cpu().detach().numpy().astype(np.uint8)
+        #TODO: fix problems hereeee
+        np1 = (255*torch.sigmoid(img_c1)).cpu().detach().numpy().astype(np.uint8)
+        np_amb = (255*torch.sigmoid(img_amb)).cpu().detach().numpy().astype(np.uint8)
+        np2 = (255*torch.sigmoid(img_c2)).cpu().detach().numpy().astype(np.uint8)
+        fig_path='./np_clean1.pdf'
+        fig_path2='./np_clean1_255.pdf'
+        fig_path3='./img_c1.pdf'
+        torchvision.utils.save_image(img_c1, fig_path3)
+        torchvision.utils.save_image(torch.from_numpy(np1/255.), fig_path)
+        torchvision.utils.save_image(torch.from_numpy(np1.astype(np.float32)), fig_path2)
+        log_artifact(fig_path)
+        log_artifact(fig_path2)
+        log_artifact(fig_path3)
+
         np_img = np.zeros((1, img_size, img_size*3)).astype(np.uint8)
         np_img[:, :, :img_size] = np1
         np_img[:, :, img_size:2*img_size] = np_amb
@@ -219,7 +229,8 @@ def main():
     if train_cvae:
         model = ConvolutionalVAE(
         latent_dim = latent_dim,
-            n_cls=n_cls
+            n_cls=n_cls,
+            conditional=conditional
         ).to(device)
         print(model)
         print("num parameters:", sum([x.numel() for x in model.parameters() if x.requires_grad]))
@@ -273,7 +284,7 @@ def main():
         
     else:
         ckpt = torch.load(model_path)
-        model = ConvolutionalVAE(latent_dim = latent_dim,n_cls=n_cls).to(device)
+        model = ConvolutionalVAE(latent_dim = latent_dim,n_cls=n_cls,conditional=conditional).to(device)
         model.load_state_dict(ckpt)
         print("Loaded ccvae checkpoint.")
         
@@ -281,7 +292,7 @@ def main():
 
 
     if generate_amnist:
-        vae = MLPVAE(latent_dim=vae_latent_dim, input_img_size=img_size).to(device)
+        vae = ConvolutionalVAE(latent_dim = vae_latent_dim, conditional=False).to(device)
         vae.load_state_dict(torch.load(vae_path))
         readout = Readout(latent_dim=vae_latent_dim, h=readout_h_dim, n_classes=n_cls).to(device)
         readout.load_state_dict(torch.load(readout_path))
@@ -318,6 +329,9 @@ def main():
                     images1,t1,images2,t2 = images1.to(device),t1.to(device),images2.to(device),t2.to(device)
                     clean_1, label_fill1, y1_label_, = reconstruct(model, images1, t1)
                     clean_2, label_fill2, y2_label_ = reconstruct(model, images2, t2)
+                    if idx % 10 == 0:
+                        torchvision.utils.save_image((clean_1*255).int()/255., f'clean_recon_{idx}.pdf')
+                        mlflow.log_artifact(f'clean_recon_{idx}.pdf')
                     amb = reconstruct_amb(model, images1, y1_label_, y2_label_, label_fill1, label_fill2)
                     mu_clean_1, mu, mu_clean_2 = get_mu(vae, clean_1, amb, clean_2)
                     good_idxs, max_clean1, max_clean2, pred_clean1, pred_clean2, top2_softprobs_amb = get_good_idxs(readout, mu_clean_1, mu, mu_clean_2, y1_label_)
@@ -335,6 +349,8 @@ def main():
                         fig_path = f'{dpaths[dset]}/{count}.png'
                         fig.savefig(fig_path)
                         log_artifact(fig_path)
+                        torchvision.utils.save_image(torch.from_numpy(np_img)/255.,fig_path[:-4]+'.pdf')
+                        log_artifact(fig_path[:-4]+'.pdf')
 
             print("Reached dataset size")
             # torchvision.utils.save_image(torch.from_numpy(np_img), "good_ambig.png")
