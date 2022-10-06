@@ -20,7 +20,7 @@ pip install -e .
 pip install -r requirements.txt
 ```
 ### download ambiguous datasets (A-MNIST and A-EMNIST)
-A-MNIST google drive link: https://drive.google.com/file/d/13-wSENzhsNUKsWOxho1HqwkD6RiNXmYg/view?usp=sharing
+A-MNIST google drive link: https://drive.google.com/file/d/1JlJVoymk-3GAf9GHbgVeTTzQzPtvLUAt/view?usp=sharing
 
 A-EMNIST google drive link: https://drive.google.com/file/d/1rU1ZPzzthNQ1ogCL777OGobcPRlxmskz/view?usp=sharing 
 
