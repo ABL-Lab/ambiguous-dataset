@@ -141,11 +141,9 @@ class SequenceDataset(Dataset):
             if self.include_irrelevant and self.ambiguous:
                 ambsum1, pair_label = self.sample(target, ambiguous=True) # 2nd label in the pair
                 target = (target+torch.randint(1,9, (1,)))%10
-                notsum_img, _ = self.sample(target)
                 ambsum2, _ = self.sample(pair_label, ambiguous=True)
                 cleansum2, _ = self.sample(pair_label)
                 clean3, _ = self.sample((pair_label-label[0]) % 10)
-                # ambnotsum_img, _ = self.sample(target, ambiguous=True)
                 img_seq = torch.stack([clean1, clean2, cleansum1, ambsum1, clean3, ambsum2, cleansum2]) # clean1 + clean2 = cleansum1 (ambsum1). clean1 + clean3 = cleansum2 (ambsum2). irrelevant = clean2 + clean3
             else:
                 img_seq = torch.stack([clean1, clean2, sum_img])
