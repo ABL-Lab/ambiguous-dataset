@@ -423,7 +423,7 @@ class ConvolutionalVAE(nn.Module):
         eps = torch.randn_like(std)
         return eps * std + mu
     
-    def forward(self, input):
+    def forward(self, input, out_h=False):
         if self.conditional:
             x, y_enc, y_dec = input
             h = self.encoder((x, y_enc))
@@ -437,6 +437,8 @@ class ConvolutionalVAE(nn.Module):
             rec = self.decoder((z, y_dec))
         else:
             rec = self.decoder(z)
+        if out_h:
+            return rec, x, mu, logvar, h
         return rec, x, mu, logvar
 
     def loss_function(self,rec,x,mu,logvar):

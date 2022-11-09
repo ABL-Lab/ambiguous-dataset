@@ -13,6 +13,17 @@ class Readout(nn.Module):
         
     def forward(self, x):
         return self.readout(x)
+
+class ReadoutV2(nn.Module):
+    def __init__(self, latent_dim=10, h=64, n_classes=10):
+        super(ReadoutV2, self).__init__()
+        self.readout = nn.Sequential(nn.Linear(latent_dim, h),
+                                     nn.ReLU(),
+                                     nn.Linear(h, n_classes),
+                                    )
+        
+    def forward(self, x):
+        return self.readout(x)
     
 
 def loss_readout(readout, vae, images, targets, criterion=nn.CrossEntropyLoss()):

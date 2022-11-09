@@ -108,6 +108,66 @@ class DatasetTriplet(Dataset):
         return self.data_len
 
 
+def partition_datasetV2(dataset, n_cls):
+    newdataset = [[] for _ in range(n_cls)]
+    for (im, label) in dataset:
+        newdataset[label[0]].append((im, label))
+    return newdataset
+
+
+class SequenceDataset(Dataset):
+    def __init__(self, root, download=False, train=True, transform=None, n_cls=10, ambiguous=False, 
+                 cache=False,cache_dir=None, include_irrelevant=False):
+        """
+        A dataset where the input is a sequence of images that should add up to a target image
+        """
+        self.triplet_dataset = DatasetTriplet(root, download, train, transform)
+        self.partitioned_datasets = partition_datasetV2(self.triplet_dataset, n_cls)
+        self.ambiguous = ambiguous
+        self.cache = cache
+        self.cache_dir = cache_dir
+        self.split = 'train' if train else 'test'
+        self.data_len = sum([len(dataset) for dataset in self.partitioned_datasets])
+        self.include_irrelevant = include_irrelevant
+
+    def __getitem__(self, index, img_size=28):
+        """
+        return the sequence as a tuple and the target as a tensor
+        """
+        if self.cache:
+            (clean1, amb, clean2), label = self.triplet_dataset[index]
+            target = (label[0] + label[1]) % 10
+            sum_img, sum_label = self.sample(target)
+            if self.include_irrelevant and self.ambiguous:
+                ambsum_img, _= self.sample(target, ambiguous=True)
+                target = (target+torch.randint(1,9, (1,)))%10
+                notsum_img, _ = self.sample(target)
+                # ambnotsum_img, _ = self.sample(target, ambiguous=True)
+                img_seq = torch.stack([clean1, clean2, sum_img, ambsum_img, notsum_img])
+            else:
+                img_seq = torch.stack([clean1, clean2, sum_img])
+            torch.save(img_seq, f'{self.cache_dir}/{self.split}/img_seq_{index}.pt')
+            torch.save(sum_label, f'{self.cache_dir}/{self.split}/sum_label_{index}.pt')
+        else:
+            img_seq = torch.load(f'{self.cache_dir}/{self.split}/img_seq_{index}.pt')
+            sum_label = torch.load(f'{self.cache_dir}/{self.split}/sum_label_{index}.pt')
+        return img_seq, sum_label
+
+    def __len__(self):
+        return self.data_len
+
+    def sample(self, target, ambiguous=False):
+        """
+        sample n images from the dataset
+        """
+        dataset = self.partitioned_datasets[target]
+        idx = torch.randint(0, len(dataset), (1,))
+        label = torch.where(dataset[idx][1] == target)[0]
+        if ambiguous:
+            label = 1
+        else:
+            label *= 2 # 0 or 1 -
+        return dataset[idx][0][label], dataset[idx][1]
 
 def save_dataset_to_file(dataset_name, og_root, new_root, blend, pairs=None, batch_size=100, n_train=60000, n_test=10000):
     os.makedirs(new_root+'/train/')
