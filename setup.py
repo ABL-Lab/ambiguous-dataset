@@ -10,7 +10,7 @@ setup(
     author_email='',
     # REPLACE WITH YOUR OWN GITHUB PROJECT LINK
     url='https://github.com/ABL-Lab/ambiguous-dataset',
-    install_requires=['pytorch-lightning'],
+    #install_requires=['pytorch-lightning'],
     packages=find_packages(),
 )
 
