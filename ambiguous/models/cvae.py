@@ -16,130 +16,8 @@ import yaml
 import h5py
 import copy
 from itertools import chain
-import pytorch_lightning as pl
-from pytorch_lightning.loggers import TensorBoardLogger
 import torch.nn.functional as F
 device='cuda'
-
-### MNIST Conditional VAE ###
-class Encoder(nn.Module):
-    def __init__(self, input_dim=784, hidden=500, latent_dim=4, n_categories=10):
-        super(Encoder, self).__init__()
-        self.l1 = nn.Linear(input_dim+n_categories, hidden)
-        self.l2 = nn.Linear(hidden, latent_dim)
-
-    def forward(self, x, c):
-        x = torch.cat([x, c], 1)
-        o = torch.tanh(self.l1(x))
-        encoding = self.l2(o)
-        return encoding, o
-
-    def sample(self, variational_params, device):
-        q_mu, q_logsigma = variational_params[:, :2], variational_params[:, 2:]
-        q_mu, q_logsigma = q_mu.view(-1, 2), q_logsigma.view(-1, 2)
-        z = torch.randn_like(q_mu, device=device)*torch.exp(q_logsigma) + q_mu 
-        return z, q_mu, q_logsigma
-
-
-class Decoder(nn.Module):
-    def __init__(self, output_dim=784, hidden=500, z_dim=2, n_categories=10):
-        super(Decoder, self).__init__()
-        self.l1 = nn.Linear(z_dim+n_categories, hidden)
-        self.l2 = nn.Linear(hidden, output_dim)
-
-    def forward(self, x1, z, c):
-        z = torch.cat([z, c], 1)
-        o = torch.tanh(self.l1(z))
-        decoded = self.l2(o)
-        return decoded
-
-
-# ## EMNIST CVAE ###
-
-class EMNIST_CVAE(pl.LightningModule):
-    def __init__(self, latent_dim, enc_layer_sizes, dec_layer_sizes, n_classes=26, conditional=False):
-        super().__init__()
-        self.encoder = EMNIST_Encoder(latent_dim, enc_layer_sizes, n_classes, conditional)
-        self.decoder = EMNIST_Decoder(latent_dim, dec_layer_sizes, n_classes, conditional)
-        self.n_classes = n_classes
-        self.latent_dim = latent_dim
-        
-    def loss(self, x, rec, mu, logvar):
-        KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
-        rec_error = F.binary_cross_entropy(rec, x, reduction='sum')
-        return (KLD + rec_error) / x.size(0)
-    
-    def training_step(self, batch, batch_idx):
-        x, t = batch
-        _,c,h,w = x.shape
-        x, t = x.to(device), t.to(device)
-        c = torch.zeros(x.size(0),self.n_classes).to(device)
-        c[range(x.size(0)), t] = 1
-        mu, logvar = self.encoder(x.view(-1, 784), c)
-        z = self.encoder.sample(mu, logvar)
-        rec = self.decoder(z, c).view(-1, 1, 28, 28)
-        loss = self.loss(x, rec, mu, logvar)
-        batch_dictionary={'loss':loss, 'mu': mu, 'targets': t}
-        self.logger.log_metrics({'Loss/TrainStream': loss.item()}, step=self.global_step)
-        return batch_dictionary      
-    
-    def validation_step(self, batch, batch_idx):
-        with torch.no_grad():
-            x, t = batch
-            _,c,h,w = x.shape
-            x, t = x.to(device), t.to(device)
-            c = torch.zeros(x.size(0),self.n_classes).to(device)
-            c[range(x.size(0)), t] = 1
-            mu, logvar = self.encoder(x.view(-1, 784), c)
-            z = self.encoder.sample(mu, logvar)
-            rec = self.decoder(z, c).view(-1, 1, 28, 28)
-            loss = self.loss(x, rec, mu, logvar)
-        batch_dictionary={'loss':loss, 'mu': mu, 'targets': t}
-        self.logger.log_metrics({'Loss/ValStream': loss.item()}, step=self.global_step)
-        return batch_dictionary
-    
-    def embedding_figure_adder(self, outputs):
-        mu = torch.cat([x['mu'] for x in outputs[-100:]], dim=0)
-        targets = torch.cat([x['targets'] for x in outputs[-100:]], dim=0).cpu().detach().numpy()
-        embed = TSNE(2).fit_transform(mu.cpu().detach().numpy())
-        fig = plt.figure()
-        sns.set(rc={'figure.figsize':(12,12)})
-        sns.scatterplot(x=embed[:,0], y=embed[:,1], hue=targets, palette='deep', legend='full')
-        fig.savefig("embedding.png")
-        plt.close(fig)
-#         self.logger.experiment.add_figure('Viz/Embedding', fig, self.current_epoch)
-        self.logger.log_image(key=f'Viz/Embedding', images=['embedding.png'])
-        
-    def generate_imgs(self, outputs):
-        targets = outputs[-2]['targets']
-        n = targets.size(0)
-        c = torch.zeros(n,self.n_classes).to(device)
-        c[range(n), targets] = 1
-        z = torch.randn(n, self.latent_dim).to(device)
-        rec = self.decoder(z, c).view(-1, 1, 28, 28)
-        torchvision.utils.save_image(rec, "reconstruction.png", nrow=8)
-        #self.logger.experiment.add_image('Viz/Reconstruction', grid, self.current_epoch)
-        self.logger.log_image(key=f'Viz/Reconstruction', images=["reconstruction.png"])
-    
-    def training_epoch_end(self, outputs):
-        avg_loss = torch.stack([x['loss'] for x in outputs]).mean()
-        #self.logger.experiment.add_scalar('Loss/Train', avg_loss, self.current_epoch)
-        self.logger.log_metrics({'Loss/Train': avg_loss.item()}, step=self.current_epoch)
-        epoch_dictionary = {'loss': avg_loss}
-    
-    def validation_epoch_end(self, outputs):
-        avg_loss = torch.stack([x['loss'] for x in outputs]).mean()
-#         self.logger.experiment.add_scalar('Loss/Val', avg_loss, self.current_epoch)
-        self.logger.log_metrics({'Loss/Val': avg_loss.item()}, step=self.current_epoch)
-        epoch_dictionary = {'loss': avg_loss}
-        self.embedding_figure_adder(outputs)
-        self.generate_imgs(outputs)
-    
-    def configure_optimizers(self):
-        optimizer = torch.optim.Adam([{'params': self.encoder.parameters(), 'lr': 1e-3}, 
-                                  {'params':self.decoder.parameters(), 'lr': 1e-3}])
-        return optimizer
-    
     
 class CatConv(nn.Module):
     def __init__(self, conv1, conv2):
@@ -359,12 +237,14 @@ class Conv_CVAE(nn.Module):
 
 class ConvolutionalVAE(nn.Module):
     def __init__(self, latent_dim=20, n_cls=10, img_size=28, in_ch=[1,32,64,128],conditional=False,
-                 kernel_size=3, stride=2, padding=1):
+                 kernel_size=3, stride=2, padding=1, h_dim=None, relu=False):
         super(ConvolutionalVAE, self).__init__()
         self.latent_dim = latent_dim
         self.n_cls = n_cls
         self.conditional = conditional
         self.in_ch = in_ch
+        self.h_dim = h_dim
+        self.activation = nn.ReLU() if relu else nn.LeakyReLU()
         kernel_size = [kernel_size]*len(in_ch)
         stride = [stride]*len(in_ch)
         padding = [padding]*len(in_ch)
@@ -372,28 +252,33 @@ class ConvolutionalVAE(nn.Module):
         modules = []
         for i in range(num_layers):
             if i == 0 and self.conditional:
-                conv0_1 = nn.Sequential(nn.Conv2d(in_ch[i], in_ch[i+1]//2, kernel_size[i], stride=stride[i], padding=padding[i]), nn.BatchNorm2d(in_ch[i+1]//2), nn.LeakyReLU())
-                conv0_2 = nn.Sequential(nn.Conv2d(n_cls, in_ch[i+1]//2, kernel_size[i], stride=stride[i], padding=padding[i]), nn.BatchNorm2d(in_ch[i+1]//2), nn.LeakyReLU())
+                conv0_1 = nn.Sequential(nn.Conv2d(in_ch[i], in_ch[i+1]//2, kernel_size[i], stride=stride[i], padding=padding[i]), nn.BatchNorm2d(in_ch[i+1]//2), self.activation)
+                conv0_2 = nn.Sequential(nn.Conv2d(n_cls, in_ch[i+1]//2, kernel_size[i], stride=stride[i], padding=padding[i]), nn.BatchNorm2d(in_ch[i+1]//2), self.activation)
                 conv = CatConv(conv0_1, conv0_2)
             else:
-                conv = nn.Sequential(nn.Conv2d(in_ch[i], in_ch[i+1], kernel_size[i], stride=stride[i], padding=padding[i]), nn.BatchNorm2d(in_ch[i+1]), nn.LeakyReLU())
+                conv = nn.Sequential(nn.Conv2d(in_ch[i], in_ch[i+1], kernel_size[i], stride=stride[i], padding=padding[i]), nn.BatchNorm2d(in_ch[i+1]), self.activation)
             modules.append(conv)
         modules.append(nn.Flatten())
-        self.encoder = nn.Sequential(*modules)
 
-        self.fc_mu = nn.Linear(128*4*4, latent_dim)
-        self.fc_logvar = nn.Linear(128*4*4, latent_dim)
+        if self.h_dim is not None:
+            modules.append(nn.Linear(128*4*4, h_dim))
+        else:
+            h_dim = 128*4*4
+        self.encoder = nn.Sequential(*modules)
+        
+        self.fc_mu = nn.Linear(h_dim, latent_dim)
+        self.fc_logvar = nn.Linear(h_dim, latent_dim)
 
         self.fc_mu2 = nn.Sequential(
                                     nn.Linear(latent_dim, in_ch[-1]*4*4), 
                                     View(shape=(-1, in_ch[-1], 4, 4)), 
-                                    nn.LeakyReLU()
+                                    self.activation
                                 )
         modules = []
         for i in range(num_layers):
             last_pad = img_size//(2**i) % 2
             scale_factor = img_size//(2**i) / (img_size//(2**(i+1)) + last_pad)
-            act_fn = nn.Sigmoid() if i == num_layers - 1 else nn.LeakyReLU()
+            act_fn = nn.Sigmoid() if i == num_layers - 1 else self.activation
             if i == 0 and self.conditional:
                 upconv0 = nn.Sequential( 
                                         nn.Upsample(scale_factor=scale_factor, mode='bilinear') , 
