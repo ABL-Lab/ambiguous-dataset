@@ -5,7 +5,7 @@ seaborn
 wandb
 matplotlib
 scikit-learn
-yaml
+pyyaml
 pytorch-lightning
 torch==1.9.1
 torchvision==0.10.1
