@@ -8,7 +8,7 @@ from ambiguous.data_utils import *
 # from ambiguous.adversarial import *
 from ambiguous.models.ambiguous_generator import *
 import ambiguous.models.cvae
-from ambiguous.models.cvae import Encoder, Decoder, EMNIST_CVAE
+from ambiguous.models.cvae import *
 from torchvision.utils import save_image
 import torch
 from torchvision import datasets, transforms
@@ -77,19 +77,15 @@ class DatasetFromNPY(Dataset):
         return self.data_len
 
 class DatasetTriplet(Dataset):
-    def __init__(self, root, download=False, train=True, transform=None):
+    def __init__(self, root, download=False, split='train', transform=None):
         """
         A dataset example where the class is embedded in the file names
         This data example also does not use any torch transforms
         Args:
             folder_path (string): path to image folder
         """
-        if train:
-            self.image_list = sorted(glob.glob(root+'/train/*image.npy'))
-            self.label_list = sorted(glob.glob(root+'/train/*label.npy'))
-        else:
-            self.image_list = sorted(glob.glob(root+'/test/*image.npy'))
-            self.label_list = sorted(glob.glob(root+'/test/*label.npy'))
+        self.image_list = sorted(glob.glob(root+f'/{split}/*image.npy'))
+        self.label_list = sorted(glob.glob(root+f'/{split}/*label.npy'))
         # Calculate len
         self.data_len = len(self.image_list)
         self.transform = transform
@@ -140,13 +136,12 @@ class SequenceDataset(Dataset):
             cleansum1, sum_label = self.sample(target)
             if self.include_irrelevant and self.ambiguous:
                 ambsum1, pair_label = self.sample(target, ambiguous=True) # 2nd label in the pair
-                target = (target+torch.randint(1,9, (1,)))%10
                 ambsum2, _ = self.sample(pair_label, ambiguous=True)
                 cleansum2, _ = self.sample(pair_label)
-                clean3, _ = self.sample((pair_label-label[0]) % 10)
+                clean3, _ = self.sample((pair_label-label[0]) % 10) # 0/6 .. 2 0-2=-2 % 10 = 8
                 img_seq = torch.stack([clean1, clean2, cleansum1, ambsum1, clean3, ambsum2, cleansum2]) # clean1 + clean2 = cleansum1 (ambsum1). clean1 + clean3 = cleansum2 (ambsum2). irrelevant = clean2 + clean3
             else:
-                img_seq = torch.stack([clean1, clean2, sum_img])
+                img_seq = torch.stack([clean1, clean2, cleansum1])
             torch.save(img_seq, f'{self.cache_dir}/{self.split}/img_seq_{index}.pt')
             torch.save(sum_label, f'{self.cache_dir}/{self.split}/sum_label_{index}.pt')
         else:
