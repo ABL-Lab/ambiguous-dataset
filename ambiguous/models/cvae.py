@@ -278,7 +278,7 @@ class ConvolutionalVAE(nn.Module):
         for i in range(num_layers):
             last_pad = img_size//(2**i) % 2
             scale_factor = img_size//(2**i) / (img_size//(2**(i+1)) + last_pad)
-            act_fn = nn.Sigmoid() if i == num_layers - 1 else self.activation
+            act_fn = nn.Identity() if i == num_layers - 1 else self.activation # sigmoid before
             if i == 0 and self.conditional:
                 upconv0 = nn.Sequential( 
                                         nn.Upsample(scale_factor=scale_factor, mode='bilinear') , 
