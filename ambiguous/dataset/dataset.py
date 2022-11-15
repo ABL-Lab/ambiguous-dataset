@@ -100,6 +100,14 @@ class DatasetTriplet(Dataset):
         label = torch.from_numpy(np.load(self.label_list[index]))
         return (clean1, amb, clean2), label
 
+    def iterlabels(self, numpy=True):
+        for index in range(len(self)):
+            if numpy:
+                label = np.load(self.label_list[index])
+            else:
+                label = torch.from_numpy(np.load(self.label_list[index]))
+            yield label
+
     def __len__(self):
         return self.data_len
 
