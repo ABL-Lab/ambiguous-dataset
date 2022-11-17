@@ -244,7 +244,7 @@ class ConvolutionalVAE(nn.Module):
         self.n_cls = n_cls
         self.conditional = conditional
         self.in_ch = in_ch
-        self.h_dim = h_dim
+        self.h_dim = h_dim # For now, this does not change the actual h_dim. It is calculated by the kernel size and stride of each conv. TODO: h_dim overrides others
         self.activation = nn.ReLU() if relu else nn.LeakyReLU()
         kernel_size = [kernel_size]*len(in_ch)
         stride = [stride]*len(in_ch)
