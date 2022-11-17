@@ -272,8 +272,8 @@ class ConvolutionalVAE(nn.Module):
         
         self.encoder = nn.Sequential(*modules)
         
-        self.fc_mu = nn.Linear(h_dim, latent_dim) if self.last_layer=='linear' else nn.Conv2d(in_ch[-1], latent_dim, kernel_size=1)
-        self.fc_logvar = nn.Linear(h_dim, latent_dim) if self.last_layer=='linear' else nn.Conv2d(in_ch[-1], latent_dim, kernel_size=1)
+        self.fc_mu = nn.Linear(h_dim, latent_dim) if self.last_layer=='linear' else nn.Sequential(nn.Conv2d(in_ch[-1], latent_dim, kernel_size=1), nn.Flatten())
+        self.fc_logvar = nn.Linear(h_dim, latent_dim) if self.last_layer=='linear' else nn.Sequential(nn.Conv2d(in_ch[-1], latent_dim, kernel_size=1), nn.Flatten())
 
         self.fc_mu2 = nn.Sequential(
                                     nn.Linear(latent_dim, in_ch[-1]*self.flatten_size**2), 
