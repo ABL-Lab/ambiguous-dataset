@@ -120,17 +120,17 @@ def partition_datasetV2(dataset, n_cls):
 
 
 class SequenceDataset(Dataset):
-    def __init__(self, root, download=False, train=True, transform=None, n_cls=10, ambiguous=False, 
+    def __init__(self, root, download=False, split='train', transform=None, n_cls=10, ambiguous=False, 
                  cache=False,cache_dir=None, include_irrelevant=False):
         """
         A dataset where the input is a sequence of images that should add up to a target image
         """
-        self.triplet_dataset = DatasetTriplet(root, download, train, transform)
+        self.triplet_dataset = DatasetTriplet(root, download, split, transform)
         self.partitioned_datasets = partition_datasetV2(self.triplet_dataset, n_cls)
         self.ambiguous = ambiguous
         self.cache = cache
         self.cache_dir = cache_dir
-        self.split = 'train' if train else 'test'
+        self.split = split
         self.data_len = sum([len(dataset) for dataset in self.partitioned_datasets])
         self.include_irrelevant = include_irrelevant
 
@@ -172,7 +172,7 @@ class SequenceDataset(Dataset):
             label = 1
         else:
             label *= 2 # 0 or 1 -
-        return dataset[idx][0][label], dataset[idx][1][other]
+        return dataset[idx][0][label], dataset[idx][1][label]
 
 def save_dataset_to_file(dataset_name, og_root, new_root, blend, pairs=None, batch_size=100, n_train=60000, n_test=10000):
     os.makedirs(new_root+'/train/')
