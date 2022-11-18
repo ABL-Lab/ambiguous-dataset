@@ -34,6 +34,24 @@ from mlflow import log_metrics, log_metric, log_artifact, log_artifacts, log_par
 BATCH_SIZE_AMNIST = 512
 T_CLEAN = 0.6 # clean image threshold, ie. model > 75% confident in top-1 prediction
 
+def reconstruct(ccvae, images, labels):
+    y_ = labels # (torch.rand(images.size(0), 1) * n_cls).type(torch.LongTensor).squeeze().to(device)
+    y = onehot[y_]
+    labels_fill_ = fill[labels]
+    rec_x, _, _, _ = ccvae((images, labels_fill_, y))
+    return rec_x, labels_fill_, y
+
+def reconstruct_amb(model, images1, y1_label_, y2_label_, label_fill1, label_fill2):
+    y_label_ = y1_label_ + y2_label_
+    label_fill = label_fill1 + label_fill2
+    amb, _, _, _ = model((images1, label_fill, y_label_))
+    return amb
+
+def get_mu(vae, clean_1, amb, clean_2):
+    _, _, mu_clean_1, _ = vae(clean_1)
+    _, _, mu_clean_2, _ = vae(clean_2)
+    _, _, mu, _ = vae(amb)
+    return mu_clean_1, mu, mu_clean_2
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--batch_size', type=int, default=64)
@@ -155,25 +173,6 @@ def main():
     onehot = onehot.scatter_(1, torch.LongTensor(range(n_cls)).view(n_cls,1).to(device), 1).view(n_cls, n_cls, 1, 1)
     if conditional:
         onehot = nn.Upsample(scale_factor=4)(onehot)
-
-    def reconstruct(ccvae, images, labels, device=device):
-        y_ = labels # (torch.rand(images.size(0), 1) * n_cls).type(torch.LongTensor).squeeze().to(device)
-        y = onehot[y_]
-        labels_fill_ = fill[labels]
-        rec_x, _, _, _ = ccvae((images, labels_fill_, y))
-        return rec_x, labels_fill_, y
-
-    def reconstruct_amb(model, images1, y1_label_, y2_label_, label_fill1, label_fill2):
-        y_label_ = y1_label_ + y2_label_
-        label_fill = label_fill1 + label_fill2
-        amb, _, _, _ = model((images1, label_fill, y_label_))
-        return amb
-
-    def get_mu(vae, clean_1, amb, clean_2):
-        _, _, mu_clean_1, _ = vae(clean_1)
-        _, _, mu_clean_2, _ = vae(clean_2)
-        _, _, mu, _ = vae(amb)
-        return mu_clean_1, mu, mu_clean_2
 
     def get_good_idxs(readout, mu_clean_1, mu, mu_clean_2, y1_label_):
         pred = torch.softmax(readout(mu)/temperature,dim=1)
@@ -381,7 +380,6 @@ def main():
                     count += clean_1.size(0)
                     step = idx+i*len(train_loader)  
                     log_metric('count', count, step=step)
-                    if step %
 
 
     mlflow.end_run()
