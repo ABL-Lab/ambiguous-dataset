@@ -355,6 +355,35 @@ def main():
             print("Reached dataset size")
             # torchvision.utils.save_image(torch.from_numpy(np_img), "good_ambig.png")
 
+    if generate_mnist_sequence:
+        for dset in sizes:
+            print(dset)
+            count=0
+            i=0
+            train_loader1 = DataLoader(train_set, batch_size=BATCH_SIZE_AMNIST,shuffle=True)
+            train_loader2 = DataLoader(train_set, batch_size=BATCH_SIZE_AMNIST,shuffle=True)
+
+            while count < sizes[dset]:
+                i+=1
+                for idx, ((images1, t1), (images2, t2)) in enumerate(zip(train_loader1, train_loader2)):
+                    images1,t1,images2,t2 = images1.to(device),t1.to(device),images2.to(device),t2.to(device)
+                    clean_1, label_fill1, y1_label_, = reconstruct(model, images1, t1)
+                    clean_2, label_fill2, y2_label_ = reconstruct(model, images2, t2)
+                    if idx % 10 == 0:
+                        torchvision.utils.save_image((clean_1*255).int()/255., f'clean_recon_{idx}.pdf')
+                        mlflow.log_artifact(f'clean_recon_{idx}.pdf')
+                    amb = reconstruct_amb(model, images1, y1_label_, y2_label_, label_fill1, label_fill2)
+                    mu_clean_1, mu, mu_clean_2 = get_mu(vae, clean_1, amb, clean_2)
+                    good_idxs, max_clean1, max_clean2, pred_clean1, pred_clean2, top2_softprobs_amb = get_good_idxs(readout, mu_clean_1, mu, mu_clean_2, y1_label_)
+                    amb, clean_1, clean_2, labels1, labels2, top2_softprobs_amb = amb[good_idxs], clean_1[good_idxs], clean_2[good_idxs], max_clean1[good_idxs], max_clean2[good_idxs], top2_softprobs_amb[good_idxs]               
+                    if clean_1.size(0)>0:
+                        np_img, np_label, top2_softprob, clean1_softprob, clean2_softprob = save_images(clean_1, amb, clean_2, labels1, labels2, top2_softprobs_amb)
+                    count += clean_1.size(0)
+                    step = idx+i*len(train_loader)  
+                    log_metric('count', count, step=step)
+                    if step %
+
+
     mlflow.end_run()
 
 

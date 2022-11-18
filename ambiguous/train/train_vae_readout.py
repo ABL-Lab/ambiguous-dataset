@@ -254,7 +254,7 @@ def main():
                 readout_opt.step()
                 train_loss += loss/batch_size
                 train_acc += (torch.argmax(pred,1)==labels).float().sum()
-            log_metric('loss_epoch/train', train_loss/len(train_loader).item())
+            log_metric('loss_epoch/train', train_loss.item()/len(train_loader))
             log_metric('acc_epoch/train', train_acc.item()/len(train_loader)/batch_size)
 
             readout.eval()
