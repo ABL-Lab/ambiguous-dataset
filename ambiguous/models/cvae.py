@@ -315,7 +315,7 @@ class ConvolutionalVAE(nn.Module):
 
     def calculate_final_dim(self):
         flatten_size = self.img_size
-        for i in range(self.self.num_layers):
+        for i in range(self.num_layers):
             flatten_size = self.output_size(flatten_size, self.kernel_size[i], self.stride[i], self.padding[i])
         self.flatten_size = flatten_size
 
