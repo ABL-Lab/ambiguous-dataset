@@ -16,6 +16,7 @@ import numpy as np
 from tqdm import tqdm
 import yaml
 import glob
+import functools
 import subprocess
 import urllib.request
 from torch.utils.data import *
@@ -90,6 +91,7 @@ class DatasetTriplet(Dataset):
         self.data_len = len(self.image_list)
         self.transform = transform
 
+    @functools.cache
     def __getitem__(self, index, img_size=28):
         single_image_path = self.image_list[index]
         im_as_np = np.load(single_image_path).astype(np.float64)/255.
