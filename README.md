@@ -24,7 +24,9 @@ A-MNIST google drive link: https://drive.google.com/file/d/1JlJVoymk-3GAf9GHbgVe
 
 A-EMNIST google drive link: https://drive.google.com/file/d/19SspjkL24DngyIdLH5C0MTIXK0gQ2BhI/view?usp=sharing
 
-sequential mnist (addition task): https://drive.google.com/file/d/1NMKNNo2lMp4Pg8UsF_cL5nzHRM5lMNRK/view?usp=sharing
+Sequential MNIST (addition task): https://drive.google.com/file/d/1NMKNNo2lMp4Pg8UsF_cL5nzHRM5lMNRK/view?usp=sharing
+
+Sequential A-MNIST (MNIST digits adding to ambiguous digit): https://drive.google.com/file/d/1vKvGwH_hvzQQrg8g7AxGxetvFEwfW_fQ/view?usp=sharing
 
 ### download trained model weights for experiments
 gdrive link: https://drive.google.com/file/d/1a49OW61ShyAVZQos6iSLmBZTrTybvOtf/view?usp=sharing
