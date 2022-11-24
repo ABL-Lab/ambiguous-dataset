@@ -24,26 +24,9 @@ class ReadoutV2(nn.Module):
         
     def forward(self, x):
         return self.readout(x)
-    
+
 
 def loss_readout(readout, vae, images, targets, criterion=nn.CrossEntropyLoss()):
-    images, targets = images.to(device), targets.to(device)
-    with torch.no_grad():
-        _, mu, _ = vae(images)
-    pred = readout(mu)
-    loss = criterion(pred, targets)
-    return loss, pred
-
-def loss_readout_OG(readout, vae, images, targets, criterion=nn.CrossEntropyLoss()):
-    images, targets = images.to(device), targets.to(device)
-    with torch.no_grad():
-        _, _,mu, _ = vae(images)
-    pred = readout(mu)
-    loss = criterion(pred, targets)
-    return loss, pred
-
-
-def loss_readout_conv(readout, vae, images, targets, criterion=nn.CrossEntropyLoss()):
     images, targets = images.to(device), targets.to(device)
     with torch.no_grad():
         _, _, mu, _ = vae(images)
