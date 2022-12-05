@@ -234,7 +234,7 @@ class Conv_CVAE(nn.Module):
 
         return self.forward(x)[0]
 
-in_ch = 
+
 class ConvolutionalVAE(nn.Module):
     def __init__(self, latent_dim=20, n_cls=10, img_size=28, n_convs=None, in_ch=[1,32,64,128], conditional=False,
                  kernel_size=3, stride=2, padding=1, h_dim=2048, relu=False, req_flatten_size=None, last_layer='linear'):
