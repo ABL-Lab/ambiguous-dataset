@@ -260,31 +260,30 @@ class ConvolutionalVAE(nn.Module):
 
         for i in range(self.num_layers):
             if i == 0 and self.conditional:
-                conv0_1 = nn.Sequential(nn.Conv2d(in_ch[i], in_ch[i+1]//2, kernel_size[i], stride=stride[i], padding=padding[i]), nn.BatchNorm2d(in_ch[i+1]//2), self.activation)
-                conv0_2 = nn.Sequential(nn.Conv2d(n_cls, in_ch[i+1]//2, kernel_size[i], stride=stride[i], padding=padding[i]), nn.BatchNorm2d(in_ch[i+1]//2), self.activation)
+                conv0_1 = nn.Sequential(nn.Conv2d(in_ch[i], in_ch[i+1]//2, self.kernel_size[i], stride=self.stride[i], padding=self.padding[i]), nn.BatchNorm2d(in_ch[i+1]//2), self.activation)
+                conv0_2 = nn.Sequential(nn.Conv2d(n_cls, in_ch[i+1]//2, self.kernel_size[i], stride=self.stride[i], padding=self.padding[i]), nn.BatchNorm2d(in_ch[i+1]//2), self.activation)
                 conv = CatConv(conv0_1, conv0_2)
             else:
-                conv = nn.Sequential(nn.Conv2d(in_ch[i], in_ch[i+1], kernel_size[i], stride=stride[i], padding=padding[i]), nn.BatchNorm2d(in_ch[i+1]), self.activation)
+                conv = nn.Sequential(nn.Conv2d(in_ch[i], in_ch[i+1], self.kernel_size[i], stride=self.stride[i], padding=self.padding[i]), nn.BatchNorm2d(in_ch[i+1]), self.activation)
             modules.append(conv)
+
+        modules.append(
+                        nn.Sequential(
+                            nn.Conv2d(in_ch[-1], self.h_dim, kernel_size=self.flatten_size, stride=self.flatten_size, padding=0),
+                            nn.BatchNorm2d(self.h_dim),
+                            self.activation
+                        )
+                    )
         
         if self.last_layer == 'linear':
-            prelatent_dim = in_ch[-1]*self.flatten_size**2
             modules.append(nn.Flatten())
-
-        else:
-            h_channels = self.h_dim//(self.flatten_size**2)
-            assert h_channels > 0, "h_dim is too small, must be greater than flatten_size**2"
-            modules.append(nn.Conv2d(in_ch[-1], h_channels, kernel_size=self.flatten_size, stride=self.flatten_size, padding=0),
-                           nn.BatchNorm2d(h_channels),
-                           self.activation
-                        )
         
         self.encoder = nn.Sequential(*modules)
 
         # readin modulates at this output
         
-        self.fc_mu = nn.Linear(prelatent_dim, latent_dim) if self.last_layer=='linear' else nn.Sequential(nn.Conv2d(h_channels, latent_dim, kernel_size=1), nn.Flatten())
-        self.fc_logvar = nn.Linear(prelatent_dim, latent_dim) if self.last_layer=='linear' else nn.Sequential(nn.Conv2d(h_channels, latent_dim, kernel_size=1), nn.Flatten())
+        self.fc_mu = nn.Linear(self.h_dim, latent_dim) if self.last_layer=='linear' else nn.Sequential(nn.Conv2d(self.h_dim, latent_dim, kernel_size=1), nn.Flatten())
+        self.fc_logvar = nn.Linear(self.h_dim, latent_dim) if self.last_layer=='linear' else nn.Sequential(nn.Conv2d(self.h_dim, latent_dim, kernel_size=1), nn.Flatten())
 
         self.fc_mu2 = nn.Sequential(
                                     nn.Linear(latent_dim, in_ch[-1]*self.flatten_size**2), 
