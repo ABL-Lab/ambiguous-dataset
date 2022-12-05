@@ -45,41 +45,6 @@ def latent_space_viz(plot_path, model, dataloader, N=1000, device='cuda'):
     fig.savefig(plot_path)
     plt.close(fig)
 
-
-class RecDataset(Dataset):
-    def __init__(self, ccvae, n, n_cls=10, latent_dim=10, transform=None, device='cuda'):
-        self.ccvae = ccvae
-        self.n = n
-        self.n_cls=n_cls
-        self.latent_dim=latent_dim
-        self.transform = transform
-        self.device=device
-        self.onehot = torch.zeros(n_cls, n_cls).scatter_(1, torch.LongTensor(range(n_cls)).view(n_cls,1), 1).view(n_cls, n_cls, 1, 1)
-
-    def __len__(self):
-        return self.n
-    
-    def __getitem__(self, idx):
-        z = torch.randn(1, self.latent_dim).to(self.device)
-        t = (torch.rand(1, 1) * self.n_cls).type(torch.LongTensor).squeeze(1)
-        y = self.onehot[t].to(self.device)
-        x = self.ccvae.decode((z, y))
-        if self.transform is not None:
-            x = self.transform(x)
-        return x.squeeze(0), t.squeeze(0)
-
-
-    def next_iter(self, batch_size):
-        z = torch.randn(batch_size, self.latent_dim).to(self.device)
-        t = (torch.rand(batch_size, 1) * self.n_cls).type(torch.LongTensor).squeeze(1)
-        y = self.onehot[t].to(self.device)
-        x = self.ccvae.decode((z, y))
-        if self.transform is not None:
-            x = self.transform(x)
-        return x.squeeze(0), t.squeeze(0)
-
-    
-
 def main():
 
     parser = argparse.ArgumentParser()
@@ -254,7 +219,7 @@ def main():
                 readout_opt.step()
                 train_loss += loss/batch_size
                 train_acc += (torch.argmax(pred,1)==labels).float().sum()
-            log_metric('loss_epoch/train', train_loss/len(train_loader).item())
+            log_metric('loss_epoch/train', train_loss.item()/len(train_loader))
             log_metric('acc_epoch/train', train_acc.item()/len(train_loader)/batch_size)
 
             readout.eval()

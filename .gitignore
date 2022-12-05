@@ -127,3 +127,16 @@ venv.bak/
 lightning_logs/
 MNIST
 .DS_Store
+
+*.png 
+*.pdf
+*.txt
+*.zip
+*.pth 
+mlruns/
+wandb/
+artifacts/
+None/
+torchvision
+dataset/
+adversarial.py
