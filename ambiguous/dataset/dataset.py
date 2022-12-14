@@ -113,6 +113,8 @@ class DatasetTriplet(Dataset):
 
 
 def partition_datasetV2(dataset, n_cls):
+    # specify n_cls=26 for EMNIST. then index class-specific datasets with newdataset[class]. 
+    # to sample from the dataset i recommend to use a pytorch dataloader.. DataLoader(newdataset[class], ...)
     newdataset = [[] for _ in range(n_cls)]
     for (im, label) in dataset:
         newdataset[label[0]].append((im, label))
