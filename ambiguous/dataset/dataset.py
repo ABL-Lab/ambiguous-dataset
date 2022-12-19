@@ -211,7 +211,7 @@ class SequenceEMNIST(Dataset):
             letter2 = self.sample(idx(word[1]))
             if self.include_irrelevant and self.ambiguous:
                 opposite_label = label[int(not gt_idx)]
-                opposite_img = triplet[int(not gt_idx)]
+                opposite_img = triplet[int(not gt_idx)*2]
                 opposite_word = random.choice(self.word_dict[opposite_label])
                 opposite_clue1 = self.sample(idx(opposite_word[0]))
                 opposite_clue2 = self.sample(idx(opposite_word[1]))
