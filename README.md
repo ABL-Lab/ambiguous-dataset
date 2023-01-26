@@ -28,6 +28,8 @@ Sequential MNIST (addition task): https://drive.google.com/file/d/1NMKNNo2lMp4Pg
 
 Sequential A-MNIST (MNIST digits adding to ambiguous digit): https://drive.google.com/file/d/1vKvGwH_hvzQQrg8g7AxGxetvFEwfW_fQ/view?usp=sharing
 
+Sequential A-EMNIST (EMNIST characters making a 3-letter word): https://drive.google.com/file/d/1TKN-B36AAvknmhS2L8Oknkr2HpXS62j-/view?usp=sharing
+
 ### download trained model weights for experiments
 gdrive link: https://drive.google.com/file/d/1a49OW61ShyAVZQos6iSLmBZTrTybvOtf/view?usp=sharing
 
