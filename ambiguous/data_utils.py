@@ -1,5 +1,4 @@
 import torch
-from torch.utils.data import *
 from torchvision import transforms, datasets
 import numpy as np
 from copy import deepcopy

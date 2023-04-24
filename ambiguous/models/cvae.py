@@ -3,7 +3,6 @@ import importlib
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.manifold import TSNE
-import seaborn as sns
 import torch
 import torchvision
 from torchvision import datasets, transforms

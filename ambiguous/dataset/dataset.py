@@ -4,11 +4,7 @@ import matplotlib.pyplot as plt
 import torchvision
 from torch import nn, optim
 from datetime import datetime
-from ambiguous.data_utils import *
-# from ambiguous.adversarial import *
-from ambiguous.models.ambiguous_generator import *
 import ambiguous.models.cvae
-from ambiguous.models.cvae import *
 from torchvision.utils import save_image
 import torch
 from torchvision import datasets, transforms
@@ -19,11 +15,11 @@ import glob
 import functools
 import subprocess
 import urllib.request
-from torch.utils.data import *
+from torch.utils.data import DataLoader
 from torch.utils.data.dataset import Dataset  # For custom datasets
 # For sequential emnist
-from english_words import english_words_lower_alpha_set as dictionary
-from abl_expectation.utils.expectation_clamp import extract_n_letter_words
+# from english_words import english_words_lower_alpha_set as dictionary
+# from abl_expectation.utils.expectation_clamp import extract_n_letter_words
 import random
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -183,77 +179,77 @@ class SequenceDataset(Dataset):
             label *= 2 # 0 or 1 -
         return dataset[idx][0][label], dataset[idx][1][label]
     
-class SequenceEMNIST(Dataset):
-    def __init__(self, root, download=False, split='train', transform=None, n_cls=26, ambiguous=False, word_length=3, 
-                 cache=False,cache_dir=None, include_irrelevant=False):
-        """
-        A dataset where the input is a sequence of letters that make a 3 letter word
-        """
+# class SequenceEMNIST(Dataset):
+#     def __init__(self, root, download=False, split='train', transform=None, n_cls=26, ambiguous=False, word_length=3, 
+#                  cache=False,cache_dir=None, include_irrelevant=False):
+#         """
+#         A dataset where the input is a sequence of letters that make a 3 letter word
+#         """
         
-        #self.unambiguous_EMNIST = torchvision.datasets.EMNIST(root=emnist_root, split='letters', download=download) # try with dataloader ?
-        self.dataset = DatasetTriplet(root, download, split, transform)
-        self.partitioned_dataset = partition_datasetV2(self.dataset, n_cls)
-        self.word_dict = self.dictionary_by_last_letter(extract_n_letter_words(dictionary, word_length), n_cls)
-        self.ambiguous = ambiguous
-        self.cache = cache
-        self.cache_dir = cache_dir
-        self.split = split
-        self.data_len = sum([len(dataset) for dataset in self.partitioned_dataset])
-        self.include_irrelevant = include_irrelevant
+#         #self.unambiguous_EMNIST = torchvision.datasets.EMNIST(root=emnist_root, split='letters', download=download) # try with dataloader ?
+#         self.dataset = DatasetTriplet(root, download, split, transform)
+#         self.partitioned_dataset = partition_datasetV2(self.dataset, n_cls)
+#         self.word_dict = self.dictionary_by_last_letter(extract_n_letter_words(dictionary, word_length), n_cls)
+#         self.ambiguous = ambiguous
+#         self.cache = cache
+#         self.cache_dir = cache_dir
+#         self.split = split
+#         self.data_len = sum([len(dataset) for dataset in self.partitioned_dataset])
+#         self.include_irrelevant = include_irrelevant
 
-    def __getitem__(self, index, img_size=28):
-        """
-        return the sequence as a tuple and the target as a tensor
-        """
-        if self.cache:
-            triplet, label = self.dataset[index]
-            gt_idx = random.randint(0, 1) #ground truth index
-            correct_label = label[gt_idx]
-            clean_img = triplet[gt_idx*2]
-            word = random.choice(self.word_dict[correct_label])
-            letter1 = self.sample(idx(word[0]))
-            letter2 = self.sample(idx(word[1]))
-            if self.include_irrelevant and self.ambiguous:
-                opposite_label = label[int(not gt_idx)]
-                opposite_img = triplet[int(not gt_idx)*2]
-                opposite_word = random.choice(self.word_dict[opposite_label])
-                opposite_clue1 = self.sample(idx(opposite_word[0]))
-                opposite_clue2 = self.sample(idx(opposite_word[1]))
-                img_seq = torch.stack([letter1, letter2, clean_img, triplet[1], opposite_clue1, opposite_clue2, opposite_img])
-            else:
-                img_seq = torch.stack([letter1, letter2, clean_img])
-            torch.save(img_seq, f'{self.cache_dir}/{self.split}/img_seq_{index}.pt')
-            torch.save(correct_label, f'{self.cache_dir}/{self.split}/sum_label_{index}.pt')
-        else:
-            img_seq = torch.load(f'{self.cache_dir}/{self.split}/img_seq_{index}.pt')
-            correct_label = torch.load(f'{self.cache_dir}/{self.split}/sum_label_{index}.pt')
-        return img_seq, correct_label
+#     def __getitem__(self, index, img_size=28):
+#         """
+#         return the sequence as a tuple and the target as a tensor
+#         """
+#         if self.cache:
+#             triplet, label = self.dataset[index]
+#             gt_idx = random.randint(0, 1) #ground truth index
+#             correct_label = label[gt_idx]
+#             clean_img = triplet[gt_idx*2]
+#             word = random.choice(self.word_dict[correct_label])
+#             letter1 = self.sample(idx(word[0]))
+#             letter2 = self.sample(idx(word[1]))
+#             if self.include_irrelevant and self.ambiguous:
+#                 opposite_label = label[int(not gt_idx)]
+#                 opposite_img = triplet[int(not gt_idx)*2]
+#                 opposite_word = random.choice(self.word_dict[opposite_label])
+#                 opposite_clue1 = self.sample(idx(opposite_word[0]))
+#                 opposite_clue2 = self.sample(idx(opposite_word[1]))
+#                 img_seq = torch.stack([letter1, letter2, clean_img, triplet[1], opposite_clue1, opposite_clue2, opposite_img])
+#             else:
+#                 img_seq = torch.stack([letter1, letter2, clean_img])
+#             torch.save(img_seq, f'{self.cache_dir}/{self.split}/img_seq_{index}.pt')
+#             torch.save(correct_label, f'{self.cache_dir}/{self.split}/sum_label_{index}.pt')
+#         else:
+#             img_seq = torch.load(f'{self.cache_dir}/{self.split}/img_seq_{index}.pt')
+#             correct_label = torch.load(f'{self.cache_dir}/{self.split}/sum_label_{index}.pt')
+#         return img_seq, correct_label
 
-    def __len__(self):
-        return self.data_len
+#     def __len__(self):
+#         return self.data_len
     
-    def dictionary_by_last_letter(self, dictionary, n_cls):
-        '''
-        Sort word dictionary by last letter
-        '''
-        sorted_dict = [[] for _ in range(n_cls)]
-        for word in dictionary:
-            sorted_dict[idx(word[-1])].append(word)
-        return sorted_dict
+#     def dictionary_by_last_letter(self, dictionary, n_cls):
+#         '''
+#         Sort word dictionary by last letter
+#         '''
+#         sorted_dict = [[] for _ in range(n_cls)]
+#         for word in dictionary:
+#             sorted_dict[idx(word[-1])].append(word)
+#         return sorted_dict
     
-    def sample(self, target, ambiguous=False):
-        """
-        sample n images from the dataset
-        """
-        dataset = self.partitioned_dataset[target]
-        idx = torch.randint(0, len(dataset), (1,))
-        label = torch.where(dataset[idx][1] == target)[0]
-        other = torch.where(dataset[idx][1] != target)[0]
-        if ambiguous:
-            label = 1
-        else:
-            label *= 2 # 0 or 1 -
-        return dataset[idx][0][label]
+#     def sample(self, target, ambiguous=False):
+#         """
+#         sample n images from the dataset
+#         """
+#         dataset = self.partitioned_dataset[target]
+#         idx = torch.randint(0, len(dataset), (1,))
+#         label = torch.where(dataset[idx][1] == target)[0]
+#         other = torch.where(dataset[idx][1] != target)[0]
+#         if ambiguous:
+#             label = 1
+#         else:
+#             label *= 2 # 0 or 1 -
+#         return dataset[idx][0][label]
 
 def save_dataset_to_file(dataset_name, og_root, new_root, blend, pairs=None, batch_size=100, n_train=60000, n_test=10000):
     os.makedirs(new_root+'/train/')
